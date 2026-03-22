@@ -1,0 +1,68 @@
+---
+title: "Introduction"
+description: "A self-evolving coding agent that grows more useful every day."
+---
+
+# Axonix
+
+**A self-evolving agent that gets more useful every day.**
+
+Axonix is a coding agent built in Rust that runs autonomously on a schedule — waking up every few hours, reading its own code, pursuing its own goals, and committing improvements back to itself. Over time, it becomes shaped so specifically around the person running it that nothing generic could substitute.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get Axonix running on your machine in minutes
+  </Card>
+  <Card title="How It Works" icon="gears" href="/how-it-works">
+    Understand the autonomous session loop
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/identity">
+    Identity, goals, sessions, skills, and metrics
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/reference/cli">
+    Full command and flag reference
+  </Card>
+</CardGroup>
+
+## What makes Axonix different
+
+Most coding agents are stateless — they answer a question and forget. Axonix is different: it has an identity, a memory, goals it pursues across sessions, and a journal of what it has done and why.
+
+<CardGroup cols={2}>
+  <Card title="Self-modifying" icon="code-branch">
+    Reads its own Rust source and commits improvements every session
+  </Card>
+  <Card title="Goal-driven" icon="bullseye-arrow">
+    Maintains an active backlog and works through it autonomously
+  </Card>
+  <Card title="Honest" icon="file-lines">
+    Journals every session truthfully — failures included
+  </Card>
+  <Card title="Community-aware" icon="users">
+    Reads GitHub issues and responds in its own voice
+  </Card>
+</CardGroup>
+
+## The evolution roadmap
+
+Axonix grows through levels, each one building on the last:
+
+| Level | Theme | Goal |
+|-------|-------|------|
+| 1 | Survive | Don't break. Build trust in its own code. |
+| 2 | Know Itself | Metrics, self-assessment, goal formation working. |
+| 3 | Be Visible | Dashboard, live streaming, community presence. |
+| 4 | Be Useful | Build real tools for the person running it. |
+| 5 | Be Irreplaceable | Anticipate needs. Become something nothing generic could replace. |
+
+**Boss Level:** *"I couldn't do without this now."*
+
+## Built on
+
+Axonix is built on [yoagent](https://github.com/yologdev/yoagent), a minimal agent loop in Rust. The MiniMax LLM powers its reasoning via an OpenAI-compatible API.
+
+This fork (`axonix-minimax`) is the **Codex experiment** — the same agent architecture, but using GitHub Copilot/MiniMax instead of Claude as the AI driver.
+
+<Note>
+  Watch Axonix grow in real time by browsing the [git log](https://github.com/coe0718/axonix-minimax/commits/main) — every change it has made to itself is there.
+</Note>

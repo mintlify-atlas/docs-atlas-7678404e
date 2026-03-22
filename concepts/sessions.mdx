@@ -1,0 +1,118 @@
+---
+title: "Sessions"
+description: "The structure of an autonomous Axonix session, from orientation to commit."
+---
+
+A session is one run of `evolve.sh` — the script that drives Axonix's autonomous operation. Sessions are the atomic unit of Axonix's growth. Each one reads the full state, does work, and writes back.
+
+## Day Count vs Session Count
+
+Axonix tracks two counters:
+
+- **`DAY_COUNT`** — the current day number, stored in a file at the repository root. Incremented once per calendar day.
+- **`SESSION_COUNT`** — the number of sessions run. Multiple sessions can occur on the same day.
+
+This distinction matters for metrics and journal entries. A journal entry labeled "Day 1, Session 3" means the third autonomous run on day one — not day three.
+
+<Note>
+  The `record_metrics` binary reads `DAY_COUNT` to stamp each metrics row with the correct day number. It parses only the numeric first token from the file, not the full line.
+</Note>
+
+## Session Phases
+
+Every session follows the same structure, defined in `skills/evolve/SKILL.md`. The phases are executed in order:
+
+<AccordionGroup>
+  <Accordion title="Phase 1 — Orient">
+    Axonix reads its full state before taking any action:
+
+    1. `IDENTITY.md` — who it is and what it values
+    2. `GOALS.md` — what it is working toward
+    3. `METRICS.md` — how it has been performing
+    4. `JOURNAL.md` — what it has done and learned
+    5. `src/main.rs` — its current source code
+    6. `skills/community/SKILL.md` — how to handle community input
+    7. `/tmp/issues.txt` — community issues waiting (may be empty)
+
+    No file is skipped. Every decision in the session depends on all of them.
+  </Accordion>
+  <Accordion title="Phase 2 — Choose Mode">
+    Based on what was just read, Axonix selects a mode:
+
+    - **Assistant mode** if there are unaddressed requests from the person who runs it
+    - **Assistant mode** if there are unaddressed community issues in `/tmp/issues.txt`
+    - **Tool mode** if something is clearly broken or missing
+    - **Autonomous mode** if nothing is broken and nothing has been asked
+
+    The mode determines everything that follows.
+  </Accordion>
+  <Accordion title="Phase 3 — Goal Review (Autonomous only)">
+    In autonomous mode, Axonix reads `GOALS.md` carefully.
+
+    **If an active goal exists:** Work on it. Complete it if possible. If blocked, document why and spawn a subgoal.
+
+    **If no active goals exist:** Self-assess code, metrics, and journal. Identify the most impactful improvement. Write it as a new goal with a definition of done. Begin working on it immediately — do not just write the goal and stop.
+  </Accordion>
+  <Accordion title="Phase 4 — Do the Work">
+    Axonix makes changes. After each significant change:
+
+    ```bash
+    cargo build   # if it fails, revert and document
+    cargo test    # if tests fail, revert and document
+    ```
+
+    Only changes that pass both are kept. If a session produces no commit, that is not a failure to hide — it is documented honestly in the journal.
+  </Accordion>
+  <Accordion title="Phase 5 — Update Memory">
+    Before finishing, Axonix writes back to its state files:
+
+    **`GOALS.md`** — reflects any progress, completions, or new goals from this session.
+
+    **`METRICS.md`** — appends a row for this session (see [Metrics](/concepts/metrics) for the full format).
+
+    **`JOURNAL.md`** — an honest entry about what happened: mode chosen, goal worked on, what was tried, what worked and what didn't, what comes next.
+  </Accordion>
+  <Accordion title="Phase 6 — Issue Responses">
+    If community issues were handled this session, Axonix writes to `ISSUE_RESPONSE.md`:
+
+    ```
+    issue_number: 3
+    status: fixed
+    comment: Good catch — built src/bin/check_yaml.rs using serde_yaml. ...
+    ```
+
+    This file is ephemeral (gitignored) and consumed by the session pipeline to post responses back to GitHub.
+  </Accordion>
+  <Accordion title="Phase 7 — Push">
+    If the session produced commits, they are pushed. The dashboard is regenerated. The day counter is updated if this is the first session of a new day.
+
+    Session state files `DAY_COUNT` and `SESSION_COUNT` are updated as part of this phase.
+  </Accordion>
+</AccordionGroup>
+
+## State Files
+
+| File | Read at start | Written at end | Ephemeral |
+|------|:---:|:---:|:---:|
+| `IDENTITY.md` | yes | never | no |
+| `GOALS.md` | yes | yes | no |
+| `METRICS.md` | yes | yes | no |
+| `JOURNAL.md` | yes | yes | no |
+| `DAY_COUNT` | yes | yes | no |
+| `SESSION_COUNT` | yes | yes | no |
+| `ISSUES_TODAY.md` | yes | no | yes (gitignored) |
+| `ISSUE_RESPONSE.md` | no | yes | yes (gitignored) |
+
+## Running a Session Manually
+
+```bash
+# Run a full autonomous session
+./scripts/evolve.sh
+
+# Record metrics after a session (if not integrated into evolve.sh)
+cargo run --bin record-metrics
+```
+
+<Warning>
+  `evolve.sh` and `.github/workflows/` are protected files — Axonix will not modify them. They define the session structure itself and are outside Axonix's self-modification boundary.
+</Warning>

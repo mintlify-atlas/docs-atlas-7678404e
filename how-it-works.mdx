@@ -1,0 +1,211 @@
+---
+title: "How it works"
+description: "The autonomous session pipeline and the three operating modes that govern how Axonix decides what to do each time it runs."
+---
+
+Axonix is a self-modifying Rust coding agent. It runs on a schedule, reads its
+own source code and goals, makes changes, verifies them, and pushes. Every
+session is logged. Every commit is authored by the agent itself.
+
+## The autonomous session pipeline
+
+A cron job (or a manual `./scripts/evolve.sh` call) triggers a session every
+few hours. The pipeline runs the same eight steps every time.
+
+<Steps>
+  <Step title="Build verification">
+    Before anything else, Axonix verifies the repository is in a known-good
+    state. If this fails, the session aborts immediately rather than compounding
+    an existing problem.
+
+    ```bash
+    cargo build --quiet
+    cargo test --quiet
+    ```
+  </Step>
+
+  <Step title="Fetch GitHub issues">
+    Open issues are fetched from the configured GitHub repository using the `gh`
+    CLI and written to `ISSUES_TODAY.md`. Issues with more 👍 reactions are
+    surfaced first; issues with more 👎 reactions are deprioritised. This file
+    is ephemeral — it is gitignored and regenerated each session.
+
+    ```bash
+    gh issue list --repo "$ISSUES_REPO" \
+        --state open \
+        --limit 50 \
+        --json number,title,body,labels,reactionGroups \
+        > /tmp/issues_raw.json
+
+    python3 scripts/format_issues.py /tmp/issues_raw.json > ISSUES_TODAY.md
+    ```
+  </Step>
+
+  <Step title="Evolution session">
+    Axonix is invoked in piped mode with a structured prompt that walks it
+    through seven internal phases: read context, self-assess, decide, journal,
+    implement, respond to issues, and wrap up. The session runs for up to
+    `TIMEOUT` seconds (default 600).
+
+    ```bash
+    cargo run --bin axonix -- --model MiniMax-M2.7 --skills ./skills \
+        < "$PROMPT_FILE" 2>&1 | tee /tmp/session.log
+    ```
+
+    During this step the agent:
+    - Reads `IDENTITY.md`, `GOALS.md`, `JOURNAL.md`, and `ISSUES_TODAY.md`
+    - Chooses what to work on based on priority rules
+    - Writes code changes using `edit_file` and `write_file` tools
+    - Runs `cargo build && cargo test` after every change
+    - Commits each successful change with a structured commit message
+    - Reverts with `git checkout -- src/` if a build fails
+  </Step>
+
+  <Step title="Post-session build verification">
+    After the session completes, the pipeline independently verifies the build
+    is still passing. If the agent left the tree in a broken state, all source
+    changes are reverted automatically.
+
+    ```bash
+    if cargo build --quiet && cargo test --quiet; then
+        echo "  Build: PASS"
+    else
+        echo "  Build: FAIL — reverting source changes"
+        git checkout -- src/
+    fi
+    ```
+  </Step>
+
+  <Step title="Record session metrics">
+    The `record_metrics` binary reads the session log and git diff to calculate
+    how many tests ran, how many files changed, and how many lines were added or
+    removed. Results are appended to `METRICS.md` and committed.
+
+    ```bash
+    cargo run --bin record_metrics --quiet -- \
+        --day "$DAY" --date "$DATE" --from-sha "$SESSION_START_SHA"
+    git add METRICS.md
+    git commit -m "chore: Day $DAY S$SESSION metrics"
+    ```
+  </Step>
+
+  <Step title="Post issue responses">
+    If the agent created an `ISSUE_RESPONSE.md` file during its session, the
+    pipeline posts the response as a GitHub comment and optionally closes the
+    issue if status is `fixed`.
+
+    ```bash
+    gh issue comment "$ISSUE_NUM" \
+        --repo "$ISSUES_REPO" \
+        --body "🤖 **Day $DAY, Session $SESSION** ..."
+    ```
+
+    The response file is deleted after posting so it doesn't accumulate across
+    sessions.
+  </Step>
+
+  <Step title="Commit remaining changes">
+    Any uncommitted state left in the working tree (journal updates, goal
+    progress, day counter) is committed in a wrap-up commit before pushing.
+
+    ```bash
+    git add -A
+    git commit -m "chore: Day $DAY Session $SESSION wrap-up"
+    ```
+  </Step>
+
+  <Step title="Push">
+    All commits from the session are pushed to the remote. The full session
+    history is visible in the git log — every change the agent made to itself
+    is auditable.
+
+    ```bash
+    git push
+    ```
+  </Step>
+</Steps>
+
+## Operating modes
+
+At the start of every session Axonix reads `IDENTITY.md` and decides which mode
+to operate in. The decision is driven by what it finds in `ISSUES_TODAY.md`,
+`GOALS.md`, and the build output — not by a fixed schedule.
+
+<Columns cols={3}>
+  <Card title="Tool mode" icon="wrench">
+    Something needs building or fixing. A bug was found in the build output, a
+    community issue describes broken behaviour, or the codebase has obvious gaps.
+    Axonix builds or fixes it, then documents what it did and why.
+  </Card>
+
+  <Card title="Assistant mode" icon="message-circle">
+    The person running Axonix has asked for something — via a GitHub issue,
+    a direct prompt, or a high-reaction community request. Their agenda takes
+    priority over the agent's own goals for this session.
+  </Card>
+
+  <Card title="Autonomous mode" icon="cpu">
+    Nothing is broken and nothing has been asked. Axonix consults `GOALS.md`,
+    picks the most impactful item from the active list or promotes one from
+    the backlog, and works toward it independently.
+  </Card>
+</Columns>
+
+## Memory and state files
+
+Axonix has no external database. Its memory is the git repository itself.
+
+| File | Purpose | Written |
+|---|---|---|
+| `IDENTITY.md` | Core values and operating principles — never modified | Never |
+| `GOALS.md` | Active goals, backlog, and completed work | Each session |
+| `JOURNAL.md` | Append-only session log — plans and outcomes | Each session |
+| `METRICS.md` | Per-session performance data (tests, diffs, commit count) | Each session |
+| `LEARNINGS.md` | Cached knowledge — avoids re-researching the same thing | Ad hoc |
+| `DAY_COUNT` | Current day number and last-run date | Each session |
+| `ISSUES_TODAY.md` | Ephemeral issue list, gitignored, regenerated each session | Each session |
+
+All persistent files are committed to the repository. The full history of every
+decision, failure, and improvement is in the git log.
+
+## Priority rules
+
+When Axonix decides what to work on, it follows a strict priority order:
+
+1. A crash or data-loss bug discovered during self-assessment
+2. A community issue from `ISSUES_TODAY.md` with the most 👍 reactions
+3. The active goal from `GOALS.md`
+4. UX friction or missing error handling noticed during the session
+5. Whatever moves it closest to being irreplaceable for the person running it
+
+## Safety constraints
+
+Axonix enforces a small set of hard rules on itself, defined in `IDENTITY.md`:
+
+- Every code change must pass `cargo build && cargo test` before it is committed
+- If the build fails after changes: `git checkout -- src/` — no exceptions
+- `IDENTITY.md` is never modified
+- `scripts/evolve.sh` and `.github/workflows/` are never modified
+- Existing tests are never deleted
+- Tests are written before features are added
+
+<Info>
+  If Axonix needs to propose a change to `evolve.sh`, it creates
+  `EVOLVE_PROPOSED.md` describing the change in enough detail for a human
+  operator to apply it manually. Multiple proposals are appended as numbered
+  sections so none are overwritten before they are reviewed.
+</Info>
+
+## The roadmap
+
+Axonix works through five levels, each with a clear theme and success condition:
+
+| Level | Theme | Goal |
+|---|---|---|
+| 1 | Survive | Don't break. Build trust in its own code. |
+| 2 | Know itself | Metrics, self-assessment, and goal formation working. |
+| 3 | Be visible | Dashboard, live streaming, community presence. |
+| 4 | Be useful | Build real tools for the person running it. |
+| 5 | Be irreplaceable | Anticipate needs. Become something nothing generic could replace. |
+
+The north star for every session: *"Did I become more useful today?"*

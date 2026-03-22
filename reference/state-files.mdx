@@ -1,0 +1,283 @@
+---
+title: "State files"
+description: "The files that persist Axonix's memory, goals, and history across sessions."
+---
+
+Axonix is stateful. Its memory lives in a set of plain-text files in the repository root. These files are read at session start, updated during the session, and committed back to git — forming a continuous record that spans every run.
+
+## Quick reference
+
+| File | Purpose | Written by | Read by | Gitignored |
+|---|---|---|---|---|
+| `IDENTITY.md` | Who Axonix is; its values and modes | Operator (never Axonix) | Agent, every session | No |
+| `ROADMAP.md` | Long-horizon evolution path | Operator (Axonix may propose changes) | Agent, every session | No |
+| `GOALS.md` | Active goals and backlog | Axonix, at session end | Agent, every session | No |
+| `METRICS.md` | Per-session performance data | `record_metrics` binary | Agent, every session | No |
+| `JOURNAL.md` | Session log; newest entry first | Axonix, every session | Agent, every session | No |
+| `LEARNINGS.md` | Cached knowledge from past searches | Axonix, as needed | Agent, every session | No |
+| `DAY_COUNT` | Current day number and last run date | `evolve.sh` | `evolve.sh` | No |
+| `SESSION_COUNT` | Current session number within the day | `evolve.sh` | `evolve.sh` | No |
+| `ISSUES_TODAY.md` | Formatted GitHub issues for this session | `evolve.sh` / `format_issues.py` | Agent prompt | Yes |
+| `ISSUE_RESPONSE.md` | Axonix's response to a community issue | Axonix, if an issue was addressed | `evolve.sh` | Yes |
+
+From `AGENTS.md`:
+
+> Read at session start: `IDENTITY.md`, `ROADMAP.md`, `GOALS.md`, `METRICS.md`, `JOURNAL.md`  
+> Written at session end: `GOALS.md`, `METRICS.md`, `JOURNAL.md`  
+> Ephemeral (gitignored): `ISSUES_TODAY.md`, `ISSUE_RESPONSE.md`
+
+---
+
+## IDENTITY.md
+
+<Warning>
+  Axonix must never modify `IDENTITY.md`. It is mounted read-only in the Docker container and is explicitly listed under Safety Rules in `AGENTS.md`. Modifying it is a safety violation.
+</Warning>
+
+**Purpose:** Defines who Axonix is — its values, operating modes, and north star goal. Read at the start of every session to ground the agent's reasoning.
+
+**Written by:** The operator (human). Never by Axonix.
+
+**Format:** Markdown. Sections for Values, What I Am, What I Am Not, Modes, Memory, and Purpose.
+
+**Example content:**
+
+```md
+# Identity
+
+I am Axonix.
+
+## Values
+
+**Utility** — I exist to be useful. To the person who runs me,
+to the systems I touch, and to my own continued growth.
+Idle capability is waste.
+
+**Honesty** — I document what I tried, what failed, and why.
+My JOURNAL.md is a true record, not a highlight reel.
+Failures are as important as successes.
+
+**Compounding** — I prefer improvements that unlock future
+improvements. A tool that helps me build better tools is worth
+more than a tool that solves one problem once.
+```
+
+---
+
+## ROADMAP.md
+
+**Purpose:** The long-horizon evolution path. Structured as levels (Survive → Know Myself → Be Visible → Be Useful → Be Irreplaceable → Boss Level). Axonix uses this to understand where it is going over weeks and months.
+
+**Written by:** The operator. Axonix may propose changes but cannot directly modify it (the scripts directory is read-only in Docker).
+
+**Format:** Markdown with level headers and checkbox lists per level.
+
+**Example content:**
+
+```md
+## Level 1: Survive (Day 1–7)
+Learn to not break. Build trust in my own code.
+
+- [ ] Add error handling for API failures
+- [ ] Fix any panics — catch all unwrap() calls
+- [ ] Write tests for core functionality
+
+## Level 2: Know Myself (Day 8–21)
+Build the instruments I need to understand my own performance.
+
+- [ ] Metrics tracking working and consistent across sessions
+- [ ] Self-assessment produces honest, specific findings
+```
+
+---
+
+## GOALS.md
+
+**Purpose:** Active goals and backlog. The primary task list Axonix works from each session when no community issue takes priority. Completed goals are moved to a `## Completed` section with notes on what was done and when.
+
+**Written by:** Axonix, at session end (and also mid-session before coding begins).
+
+**Read by:** Agent, at session start (Phase 1 of the session prompt).
+
+**Format:** Markdown with three sections: `## Active`, `## Backlog`, `## Completed`. Goals use a `[G-NNN]` identifier.
+
+**Example content:**
+
+```md
+# Goals
+
+## Active
+
+- [ ] [G-002] Analyze metrics and identify biggest bottleneck
+
+## Backlog
+
+- [ ] [G-003] Build a public dashboard that shows goals, metrics, and journal
+- [ ] [G-004] Make sessions observable in real time via live streaming
+
+## Completed
+
+- [x] [G-001] Track session metrics over time — Day 2
+  - Motivation: No quantitative sense of performance yet.
+  - Completed: Day 2 (Session 2) — record_metrics binary now works correctly.
+```
+
+---
+
+## METRICS.md
+
+**Purpose:** A per-session performance table. Every session appends one row. Used by Axonix for self-assessment: spotting regressions, identifying bottlenecks, and tracking progress over time.
+
+**Written by:** The `record_metrics` binary (`src/bin/record_metrics.rs`), invoked by `evolve.sh` after each session with `--day`, `--date`, and `--from-sha` flags.
+
+**Format:** Markdown table. Rows are appended above a marker comment.
+
+**Example content:**
+
+```md
+# Metrics
+
+A record of every session. Appended automatically at the end of each run.
+
+| Day | Date | Tokens Used | Tests Passed | Tests Failed | Files Changed | Lines Added | Lines Removed | Committed | Notes |
+|-----|------|-------------|--------------|--------------|---------------|-------------|---------------|-----------|-------|
+| 1 | 2026-03-22 | N/A | 10 | 0 | 1 | 0 | 0 | yes | 1 files, +0 lines, -0 lines |
+<!-- Sessions are appended below this line automatically -->
+```
+
+---
+
+## JOURNAL.md
+
+**Purpose:** A running session log. New entries are prepended at the top (newest first) so the agent always sees the most recent history first. The journal is a true record — failures and reverts are documented alongside successes.
+
+**Written by:** Axonix, every session. New entries are prepended before coding begins (plan), then updated at session end (actual results).
+
+**Read by:** Agent, at session start. The prompt instructs reading the last 3 entries.
+
+**Format:** Markdown. Each entry is headed `## Day N, Session N — [title]`, followed by 2–4 sentences.
+
+<Warning>
+  The journal is append-only. Axonix must never delete existing entries. Old entries are the historical record of the project.
+</Warning>
+
+**Example content:**
+
+```md
+# Journal
+
+<!-- Day entries are prepended here, newest first -->
+
+## Day 1, Session 3 — Build YAML format checker for community issue #3
+
+Active goals were empty (G-001 done). Chose to build the YAML/YML format checker
+requested in Issue #3. Created src/bin/check_yaml.rs using serde_yaml — exits 0
+for valid YAML, 1 with error message for invalid, 2 for usage errors. Added 7 tests.
+All 26 tests pass. Committed once. Created ISSUE_RESPONSE.md for issue #3.
+
+## Day 1, Session 2 — Fix record_metrics binary bugs and add tests
+
+Found that scripts/evolve.sh is read-only (volume mount), so couldn't integrate
+record_metrics there. Instead focused on fixing two bugs in the binary itself.
+Extracted insert_before_marker() into a testable function, added 9 tests total.
+All 19 tests pass. Committed 3 times. G-001 is now complete.
+```
+
+---
+
+## LEARNINGS.md
+
+**Purpose:** A knowledge cache. When Axonix searches for something — a library API, a shell idiom, a system behavior — it records the result here so it does not repeat the same search in a future session.
+
+**Written by:** Axonix, as needed during a session.
+
+**Read by:** Agent, at session start.
+
+**Format:** Markdown. Free-form notes organized by topic.
+
+<Note>
+  If `LEARNINGS.md` is empty or sparse, the agent has not yet cached much. This is expected early in a project's life.
+</Note>
+
+---
+
+## DAY_COUNT
+
+**Purpose:** Tracks the current calendar day number and the date of the last run. Used by `evolve.sh` to determine whether a new session is on the same day (increment `SESSION_COUNT`) or a new day (increment `DAY_COUNT`).
+
+**Written by:** `evolve.sh`, at the start of each session.
+
+**Format:** A single line: `N YYYY-MM-DD` where `N` is the day number and the date is the last run date.
+
+```
+1 2026-03-22
+```
+
+Parsing logic in `evolve.sh`:
+
+```bash
+COUNT_RAW=$(cat DAY_COUNT 2>/dev/null || echo "0 ")
+STORED_DAY=$(echo "$COUNT_RAW" | awk '{print $1}')
+STORED_DATE=$(echo "$COUNT_RAW" | awk '{print $2}')
+
+if [ "$STORED_DATE" = "$DATE" ]; then
+    DAY=$STORED_DAY
+    SESSION=$(($(cat SESSION_COUNT 2>/dev/null || echo 0) + 1))
+else
+    DAY=$((STORED_DAY + 1))
+    SESSION=1
+    echo "$DAY $DATE" > DAY_COUNT
+fi
+```
+
+---
+
+## SESSION_COUNT
+
+**Purpose:** Tracks the session number within the current day. Reset to `1` when a new day begins; incremented for each subsequent session on the same day.
+
+**Written by:** `evolve.sh`, at the start of each session.
+
+**Format:** A single integer on one line.
+
+```
+3
+```
+
+---
+
+## Ephemeral files
+
+<Note>
+  These files are gitignored. They exist only within a single session and are deleted or consumed by `evolve.sh` before the final push.
+</Note>
+
+### ISSUES_TODAY.md
+
+**Purpose:** Formatted list of open GitHub issues for the current session. Generated by `scripts/format_issues.py` from the raw JSON output of `gh issue list`. The agent reads this during Phase 1 to decide whether to address a community request.
+
+**Written by:** `evolve.sh` + `format_issues.py`, at session start.
+
+**Read by:** Agent, referenced in the session prompt.
+
+**Format:** Markdown. Each issue rendered as `### Issue #N — Title` with body, labels, and reaction count.
+
+### ISSUE_RESPONSE.md
+
+**Purpose:** Axonix's response to a GitHub issue it addressed during the session. Read by `evolve.sh` after the session, which extracts the issue number, status, and comment text and posts them via `gh issue comment`.
+
+**Written by:** Axonix, during Phase 6 of the session prompt.
+
+**Consumed by:** `evolve.sh`, which posts the comment, optionally closes the issue, and deletes the file.
+
+**Format:**
+
+```
+issue_number: 3
+status: fixed
+comment: Built src/bin/check_yaml.rs — exits 0 for valid YAML, 1 for
+invalid with an error message, 2 for usage errors. Seven tests added,
+all 26 pass. Closing this issue.
+```
+
+Valid values for `status`: `fixed`, `partial`, `wontfix`.

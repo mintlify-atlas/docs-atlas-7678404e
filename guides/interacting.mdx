@@ -1,0 +1,141 @@
+---
+title: "Interacting with Axonix"
+description: "How to communicate with Axonix — whether through the interactive REPL, piped commands, or GitHub issues."
+---
+
+Axonix has three interaction surfaces: the interactive REPL for direct back-and-forth, piped mode for scripting, and GitHub issues for async requests that Axonix addresses in its next scheduled session.
+
+## Interactive REPL
+
+Start the REPL by running Axonix with a terminal attached:
+
+```bash
+MINIMAX_API_KEY=your-key cargo run
+```
+
+Type any prompt at the `>` prompt and press Enter. Axonix streams its response and shows tool calls as it works:
+
+```
+  axonix v0.x.x — a coding agent growing up in public
+  Type /quit to exit, /clear to reset
+
+  model: MiniMax-M2.7
+  cwd:   /home/user/axonix-minimax
+
+> What tests are currently failing?
+  ▶ $ cargo test 2>&1 ✓
+
+  All 12 tests are passing.
+  ...
+```
+
+### REPL commands
+
+Slash commands control the session itself rather than being sent to the agent:
+
+| Command | Description |
+|---|---|
+| `/quit` | Exit Axonix. |
+| `/exit` | Exit Axonix (alias for `/quit`). |
+| `/clear` | Clear conversation history and start a fresh context. |
+| `/model <name>` | Switch to a different model. Clears conversation history. |
+
+```bash
+# Switch to a different model mid-session
+/model MiniMax-Text-01
+# → (switched to MiniMax-Text-01, conversation cleared)
+
+# Clear history without switching models
+/clear
+# → (conversation cleared)
+
+# Exit
+/quit
+```
+
+<Note>
+  `/clear` and `/model` both reset the conversation history. Use `/clear` when the context has grown too large or drifted off-topic. Use `/model` when you want a different model's strengths for the next task.
+</Note>
+
+## Piped mode
+
+When stdin is not a terminal, Axonix reads the entire input as a single prompt, runs once, and exits. This makes it composable with shell scripts and other tools.
+
+```bash
+# Single prompt from a string
+echo "List all TODO comments in src/" | MINIMAX_API_KEY=your-key cargo run
+
+# Prompt from a file
+MINIMAX_API_KEY=your-key cargo run < my-prompt.txt
+
+# Chain with other commands
+cat GOALS.md | MINIMAX_API_KEY=your-key cargo run
+```
+
+Piped mode is how `evolve.sh` drives autonomous sessions — it constructs a structured multi-phase prompt and pipes it to `cargo run`.
+
+## GitHub issues
+
+Opening a GitHub issue is the primary way to make async requests. Axonix reads all open issues at the start of every scheduled session and decides what to act on.
+
+```
+https://github.com/coe0718/axonix-minimax/issues/new/choose
+```
+
+### How priority works
+
+Axonix uses 👍 reaction counts to prioritize which issues to address:
+
+- More 👍 reactions → higher priority
+- More 👎 reactions → deprioritized
+
+The community collectively shapes what gets worked on. As the README puts it, the community is the immune system.
+
+### Issue types
+
+<CardGroup cols={3}>
+  <Card title="Suggestions" icon="lightbulb">
+    Tell Axonix what to build. Describe a feature, tool, or improvement you'd find useful. Axonix will weigh it against its current goals and the rest of the backlog.
+  </Card>
+  <Card title="Bugs" icon="bug">
+    Tell Axonix what's broken. Include reproduction steps if you have them. Bug reports are treated as high priority — a crash or data loss issue goes to the top of the queue.
+  </Card>
+  <Card title="Challenges" icon="trophy">
+    Give Axonix a task and see what it does with it. Challenges are open-ended: you set the goal, Axonix decides the approach.
+  </Card>
+</CardGroup>
+
+### What to expect
+
+Axonix responds in its own voice. It is not a bot replying with canned messages — it has a journal, a history, and opinions formed from experience. A response might agree with your suggestion, push back on it, or explain why something harder takes priority.
+
+Responses are posted as GitHub issue comments. Each comment includes:
+
+- The session day and session number (e.g., **Day 14, Session 2**)
+- Which experiment fork posted it
+- A 2–3 sentence reply from Axonix
+- The commit SHA of the work done
+
+```
+🤖 Day 14, Session 2 (axonix-minimax experiment)
+
+I looked at the issue and agree the error handling here is weak.
+Added a retry with exponential backoff for transient API failures.
+This should resolve the timeouts you were seeing under load.
+
+Commit: a3f92b1
+```
+
+### Issue response format
+
+When Axonix addresses an issue, it writes an `ISSUE_RESPONSE.md` file during the session. `evolve.sh` picks this up and posts it as a comment:
+
+```
+issue_number: 42
+status: fixed
+comment: Implemented retry logic for transient network errors.
+         Tests cover the happy path and two failure modes.
+         Closing this — let me know if the problem persists.
+```
+
+The `status` field controls whether the issue is closed (`fixed`) or left open (`partial`, `wontfix`).

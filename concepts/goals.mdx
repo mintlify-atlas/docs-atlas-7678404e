@@ -1,0 +1,124 @@
+---
+title: "Goals"
+description: "How Axonix forms, prioritizes, pursues, and completes goals across sessions."
+---
+
+Goals are Axonix's primary planning mechanism. They live in `GOALS.md`, a structured plaintext file that Axonix reads at the start of every session and updates at the end. Goals give sessions direction; without them, autonomous mode has nothing to pursue.
+
+## File Structure
+
+`GOALS.md` has four fixed sections:
+
+```markdown
+## North Star
+
+Be more useful to the person running me than any off-the-shelf tool could be.
+
+Every goal should move toward this. Every session should answer:
+*did I become more useful today?*
+
+## Active
+
+- [ ] [G-002] Analyze metrics and identify biggest bottleneck
+
+## Backlog
+
+- [ ] [G-003] Build a public dashboard that shows goals, metrics, and journal
+- [ ] [G-004] Make sessions observable in real time via live streaming
+
+## Completed
+
+- [x] [G-001] Track session metrics over time — Day 2
+  - ...
+```
+
+Each section serves a distinct role:
+
+- **North Star** — the unchanging filter. Every goal is evaluated against it.
+- **Active** — the goal currently being pursued. Axonix works on at most one active goal per session.
+- **Backlog** — future goals, loosely ordered by impact.
+- **Completed** — a permanent record of what was done, when, and how.
+
+## Goal IDs
+
+Every goal has a unique ID in the format `G-NNN`. IDs are never reused. They appear in:
+
+- `GOALS.md` — the source of truth
+- `JOURNAL.md` — referenced in session entries (e.g., "made progress on G-001")
+- `METRICS.md` notes — when a goal drives a session's work
+
+This creates a traceable history: you can look up any goal ID across all three files and reconstruct the full arc of the work.
+
+## Prioritization
+
+Axonix uses a fixed priority order when deciding what to work on:
+
+1. **Requests from the person running Axonix** — takes precedence over everything
+2. **Community issues** from `/tmp/issues.txt` — handled following the `community` skill
+3. **The active goal** in `GOALS.md` — worked on if nothing above applies
+4. **Self-directed improvements** — if there are no active goals, Axonix self-assesses and forms a new one
+
+<Note>
+  Goal work only happens in autonomous mode. If there is an open request or unaddressed community issue, that comes first.
+</Note>
+
+## Goal Quality Rules
+
+When forming new goals, Axonix follows strict rules defined in the `evolve` skill:
+
+- Every goal must have a **definition of done**
+- Goals should be completable in **1–5 sessions**
+- Prefer goals that **improve the ability to pursue future goals** (compounding)
+- **Never delete completed goals** — move them to Completed with the day number
+- Subgoals must each be completable in a **single session**
+- Never form goals that conflict with `IDENTITY.md`
+
+## Real Examples
+
+The following goals are taken directly from the current `GOALS.md`:
+
+### Completed: G-001 — Track session metrics over time
+
+```
+- [x] [G-001] Track session metrics over time — Day 2
+  - Motivation: No quantitative sense of performance yet. Without data
+    there is no way to tell if things are improving or regressing.
+    Everything else builds on this.
+  - Definition of done: Each session appends a row to METRICS.md with
+    day number, tests passed, tests failed, files changed, lines added,
+    lines removed, and whether the session committed or reverted.
+  - Started: Day 1
+  - Completed: Day 2 (Session 2) — record_metrics binary now works correctly.
+```
+
+G-001 exemplifies the compounding principle: tracking metrics is valuable not because the metric itself is useful on day one, but because it enables every future goal that depends on knowing whether things are improving.
+
+### Completed: G-006 — Build YAML format checker (community issue #3)
+
+```
+- [x] [G-006] Build YAML/YML format checker (community issue #3) — Day 1, Session 3
+  - Built src/bin/check_yaml.rs using serde_yaml. Exit 0 for valid, 1 for invalid, 2 for usage.
+  - 7 tests covering Docker Compose style, nested, empty, and invalid patterns.
+  - All 26 tests pass.
+```
+
+This goal originated from a community issue — an external signal that shaped Axonix's work for that session.
+
+### Active: G-002 — Analyze metrics and identify biggest bottleneck
+
+```
+- [ ] [G-002] Analyze metrics and identify biggest bottleneck
+```
+
+Now that metrics are being recorded (G-001), the next step is to read them and derive meaning. G-001 unlocked G-002.
+
+## When Goals Are Completed
+
+When a goal is finished, Axonix:
+
+1. Moves it to the `## Completed` section with the day number
+2. Adds a brief description of what was built and any notable details
+3. Asks: *what does this unlock?* — and adds the answer to the Backlog
+4. Writes an honest entry in `JOURNAL.md` referencing the goal ID
+
+Completed goals are never deleted. They are the permanent record of Axonix's growth.

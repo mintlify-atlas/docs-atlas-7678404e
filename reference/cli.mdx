@@ -1,0 +1,154 @@
+---
+title: "CLI reference"
+description: "Complete reference for the axonix command-line interface."
+---
+
+## Synopsis
+
+```bash
+axonix [OPTIONS]
+```
+
+Or via Cargo:
+
+```bash
+cargo run --bin axonix -- [OPTIONS]
+```
+
+Axonix reads a prompt from the user and sends it to the configured model. It operates in two modes depending on whether stdin is a terminal: an interactive REPL, or a single-shot piped mode.
+
+## Options
+
+<ParamField path="--model" type="string">
+  The model to use for this session. Passed directly to the MiniMax API.
+
+  **Default:** `MiniMax-M2.7`
+
+  ```bash
+  axonix --model MiniMax-Text-01
+  ```
+</ParamField>
+
+<ParamField path="--skills" type="string">
+  Path to a directory containing skill files. Skill files extend the agent's capabilities with domain-specific instructions.
+
+  This flag can be repeated to load skills from multiple directories.
+
+  ```bash
+  axonix --skills ./skills
+  axonix --skills ./skills --skills ./extra-skills
+  ```
+
+  If loading fails, Axonix prints a warning and continues without skills.
+</ParamField>
+
+<ParamField path="--help" type="flag">
+  Print the help message and exit. Accepts `-h` as a short form.
+
+  ```bash
+  axonix --help
+  axonix -h
+  ```
+</ParamField>
+
+<ParamField path="--version" type="flag">
+  Print the version string and exit. Accepts `-V` as a short form.
+
+  ```bash
+  axonix --version
+  axonix -V
+  ```
+</ParamField>
+
+## Usage examples
+
+<CodeGroup>
+
+```bash Basic interactive session
+MINIMAX_API_KEY=your_key axonix
+```
+
+```bash Choose a model
+MINIMAX_API_KEY=your_key axonix --model MiniMax-Text-01
+```
+
+```bash Load skills directory
+MINIMAX_API_KEY=your_key axonix --skills ./skills
+```
+
+```bash Multiple skill directories
+MINIMAX_API_KEY=your_key axonix --skills ./skills --skills ./extra-skills
+```
+
+```bash Via Cargo
+MINIMAX_API_KEY=your_key cargo run --bin axonix -- --model MiniMax-M2.7 --skills ./skills
+```
+
+```bash Piped mode (single prompt)
+echo "explain src/main.rs" | MINIMAX_API_KEY=your_key axonix
+```
+
+</CodeGroup>
+
+## Operating modes
+
+### Interactive REPL
+
+When stdin is a terminal, Axonix starts an interactive session. It prints a startup banner, then presents a prompt (`> `) for you to type into.
+
+```
+  axonix v0.1.0 — a coding agent growing up in public
+  Type /quit to exit, /clear to reset
+
+  model: MiniMax-M2.7
+  cwd:   /your/working/directory
+
+> 
+```
+
+The banner includes the current model and working directory. If skills are loaded, it also shows how many were found.
+
+After each response, Axonix prints the token usage for that turn:
+
+```
+  tokens: 312 in / 87 out
+```
+
+See [REPL commands](/reference/commands) for the full list of `/` commands available in this mode.
+
+### Piped mode
+
+When stdin is not a terminal — for example when you pipe input from another command or a file — Axonix reads all of stdin as a single prompt, runs it once, prints the response, and exits.
+
+```bash
+echo "add error handling to src/main.rs" | axonix
+```
+
+Piped mode does not show the startup banner. It prints a brief status line to stderr:
+
+```
+  axonix (piped mode) — model: MiniMax-M2.7
+```
+
+This is how `scripts/evolve.sh` drives Axonix during automated sessions — it writes a prompt to a temp file and pipes it in.
+
+<Note>
+  If stdin is empty in piped mode, Axonix exits with an error.
+</Note>
+
+## API key lookup
+
+Axonix requires an API key to call the model. It checks environment variables in this order:
+
+1. `MINIMAX_API_KEY`
+2. `API_KEY`
+
+If neither is set (or both are empty), Axonix exits with:
+
+```
+error: No API key found.
+Set MINIMAX_API_KEY environment variable.
+Example: MINIMAX_API_KEY=... cargo run
+```
+
+See [Environment variables](/reference/environment) for details.

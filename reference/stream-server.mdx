@@ -1,0 +1,118 @@
+---
+title: "stream_server"
+description: "Live session streaming server that broadcasts Axonix session events to connected clients in real time over Server-Sent Events."
+---
+
+`stream_server` is an HTTP server that lets you observe an Axonix session as it runs. A producer (typically the session pipeline) POSTs lines of text to the server; any number of browser or CLI clients can receive those lines as a live stream via Server-Sent Events (SSE).
+
+<Info>
+  `stream_server` is part of the Level 3 "Be Visible" goal on the Axonix roadmap. It provides the real-time observability layer for public sessions.
+</Info>
+
+## Starting the server
+
+```bash
+cargo run --bin stream_server
+```
+
+The server binds to `0.0.0.0:7041` and prints:
+
+```
+stream_server listening on 0.0.0.0:7041
+```
+
+If the port is already in use or the address is invalid, the process exits with code `1` and prints an error to stderr.
+
+## Configuration
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Port | `7041` | Hardcoded. No environment variable override. |
+| Bind address | `0.0.0.0` | Accepts connections on all interfaces. |
+| Channel capacity | `1024` messages | In-memory broadcast buffer. Slow clients that fall behind this limit drop messages. |
+| Static files | `docs/` directory | Served from the working directory at runtime. |
+
+## Endpoints
+
+### `POST /pipe`
+
+Accepts a plain-text request body. Each line is broadcast individually to all connected SSE clients.
+
+```bash
+curl -X POST http://localhost:7041/pipe \
+  --data "Session started"
+```
+
+```bash
+curl -X POST http://localhost:7041/pipe \
+  --data $'Build succeeded\nTests passed: 10'
+```
+
+Multi-line bodies are split on newlines and each line is sent as a separate SSE event. The response body is empty.
+
+### `GET /stream`
+
+Opens an SSE connection. The client receives each line that is POSTed to `/pipe` as a `data:` event. The connection is kept alive with SSE keep-alive pings.
+
+```bash
+curl -N http://localhost:7041/stream
+```
+
+In a browser:
+
+```javascript
+const es = new EventSource('http://localhost:7041/stream');
+es.onmessage = (e) => console.log(e.data);
+```
+
+Each SSE event has the form:
+
+```
+data: <line text>\n\n
+```
+
+### Static file serving (fallback)
+
+All other paths are served from the `docs/` directory in the working directory. This allows `stream_server` to double as a static host for the Axonix dashboard alongside the live stream.
+
+## Architecture
+
+```
+POST /pipe  ──►  broadcast::Sender  ──►  broadcast::Receiver  ──►  GET /stream (SSE)
+                 (capacity 1024)         (one per client)
+```
+
+The server uses a single Tokio broadcast channel. Every client that calls `GET /stream` subscribes to that channel. When `POST /pipe` receives a body, it splits it into lines and sends each line into the channel. All active subscribers receive the message.
+
+<Note>
+  The broadcast channel has a fixed capacity of 1024 messages. If a connected client is slow and the buffer fills up, older messages are dropped for that client. The producer is never blocked.
+</Note>
+
+## Session pipeline integration
+
+During a live session, the pipeline can pipe output to `stream_server` so observers see events as they happen:
+
+```bash
+# Start the server in the background before the session
+cargo run --bin stream_server &
+
+# Pipe session output to /pipe during the run
+some_command | while IFS= read -r line; do
+  curl -s -X POST http://localhost:7041/pipe --data "$line"
+done
+```
+
+Clients connect to `GET /stream` and receive events in real time without polling.
+
+## Dependencies
+
+| Crate | Role |
+|-------|------|
+| `axum 0.8` | HTTP routing and SSE response type |
+| `tokio` (full features) | Async runtime |
+| `tokio-stream` (sync feature) | Wraps `broadcast::Receiver` as a `Stream` |
+| `tower-http` (fs feature) | Serves static files from `docs/` |
+
+## Roadmap context
+
+`stream_server` implements the observability layer described in the Axonix Level 3 "Be Visible" goal. The intent is that anyone watching a session can see what Axonix is doing as it happens, without waiting for a post-session summary.

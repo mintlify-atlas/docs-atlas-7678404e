@@ -1,0 +1,256 @@
+---
+title: "Running locally"
+description: "How to run Axonix on your own machine, from a quick interactive session to a full autonomous evolution cycle."
+---
+
+Axonix runs as a native Rust binary backed by the MiniMax API. You can use it as an interactive coding assistant in your terminal, pipe single prompts to it from scripts, or trigger a full autonomous session with `evolve.sh`.
+
+<Tabs>
+  <Tab title="Native">
+    <Steps>
+      <Step title="Install prerequisites">
+        You need Rust (with `cargo`), `git`, and a MiniMax API key.
+
+        ```bash
+        # Verify Rust is installed
+        cargo --version
+
+        # Verify git is installed
+        git --version
+        ```
+
+        Get a MiniMax API key from the MiniMax platform and keep it handy.
+      </Step>
+
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/coe0718/axonix-minimax
+        cd axonix-minimax
+        ```
+      </Step>
+
+      <Step title="Set up environment variables">
+        Copy the example environment file and fill in your credentials:
+
+        <CodeGroup>
+          ```bash Terminal
+          cp .env.example .env
+          ```
+
+          ```bash .env.example
+          MINIMAX_API_KEY=sk-...
+          GH_TOKEN=ghp_...
+          STREAM_URL=http://stream:7040/pipe
+          ```
+        </CodeGroup>
+
+        `MINIMAX_API_KEY` is required to run the agent. `GH_TOKEN` is only needed if you want `evolve.sh` to post issue responses to GitHub.
+
+        <Note>
+          You can also pass `MINIMAX_API_KEY` inline on the command line instead of writing it to `.env`. The agent also accepts the key via the `API_KEY` environment variable as a fallback.
+        </Note>
+      </Step>
+
+      <Step title="Build the project">
+        ```bash
+        cargo build
+        ```
+
+        The first build fetches and compiles all dependencies, so it may take a minute or two.
+      </Step>
+
+      <Step title="Run Axonix">
+        Start the interactive REPL:
+
+        ```bash
+        MINIMAX_API_KEY=your-key cargo run
+        ```
+
+        Or run a single prompt in piped mode:
+
+        ```bash
+        echo "What files are in this directory?" | MINIMAX_API_KEY=your-key cargo run
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Docker">
+    <Steps>
+      <Step title="Install prerequisites">
+        You need Docker and Docker Compose, plus a MiniMax API key and (optionally) a GitHub token.
+      </Step>
+
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/coe0718/axonix-minimax
+        cd axonix-minimax
+        ```
+      </Step>
+
+      <Step title="Configure environment variables">
+        ```bash
+        cp .env.example .env
+        # Edit .env and add your MINIMAX_API_KEY and GH_TOKEN
+        ```
+
+        The `docker-compose.yml` reads these variables automatically:
+
+        ```yaml docker-compose.yml
+        environment:
+          - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+          - GH_TOKEN=${GH_TOKEN}
+          - TZ=${TZ:-America/Indiana/Indianapolis}
+          - RUST_LOG=yoagent=warn
+        ```
+      </Step>
+
+      <Step title="Add a deploy key (optional)">
+        If you want the container to push commits to GitHub, place an SSH deploy key at `./deploy_key`. The `docker-compose.yml` mounts it read-only:
+
+        ```yaml docker-compose.yml
+        volumes:
+          - ./deploy_key:/workspace/.ssh/id_ed25519:ro
+        ```
+      </Step>
+
+      <Step title="Build the image">
+        ```bash
+        docker compose build
+        ```
+
+        The Dockerfile uses a two-stage dependency cache to speed up rebuilds:
+
+        ```dockerfile Dockerfile
+        FROM rust:latest
+
+        # Install system dependencies
+        RUN apt-get update && apt-get install -y \
+            git python3 curl ca-certificates
+
+        # Cache Cargo dependencies before copying real source
+        COPY Cargo.toml Cargo.lock* ./
+        COPY vendor/ ./vendor/
+        RUN cargo build --release
+
+        # Build the real project
+        COPY . .
+        RUN cargo build --release
+        ```
+      </Step>
+
+      <Step title="Run a session">
+        ```bash
+        docker compose run axonix-minimax
+        ```
+
+        This executes `./scripts/evolve.sh` inside the container — a full autonomous session.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Running modes
+
+### Interactive REPL
+
+When stdin is a terminal, Axonix starts an interactive REPL. You can have a back-and-forth conversation, run multiple prompts, and use slash commands to control the session.
+
+```bash
+MINIMAX_API_KEY=your-key cargo run
+```
+
+The banner shows the active model, any loaded skills, and your current working directory.
+
+### Piped mode
+
+When stdin is not a terminal (i.e., data is piped in), Axonix reads the full input as a single prompt, runs once, prints the result, and exits. This is useful for scripting.
+
+```bash
+echo "Summarize the changes in the last 5 commits" | MINIMAX_API_KEY=your-key cargo run
+```
+
+```bash
+# Use with files or here-docs
+MINIMAX_API_KEY=your-key cargo run < my-prompt.txt
+```
+
+### Full autonomous session
+
+The `evolve.sh` script orchestrates a complete self-improvement cycle:
+
+1. Verifies the build passes
+2. Fetches open GitHub issues
+3. Pipes a structured prompt to the agent
+4. Verifies the build again after the session
+5. Records session metrics
+6. Posts responses to any addressed GitHub issues
+7. Pushes all commits
+
+```bash
+MINIMAX_API_KEY=your-key ./scripts/evolve.sh
+```
+
+You can configure the session timeout and target repository:
+
+```bash
+MINIMAX_API_KEY=your-key TIMEOUT=900 REPO=youruser/yourrepo ./scripts/evolve.sh
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `MINIMAX_API_KEY` | — | Required. Your MiniMax API key. |
+| `REPO` | `coe0718/axonix-minimax` | GitHub repo for pushes. |
+| `ISSUES_REPO` | `coe0718/axonix-minimax` | GitHub repo to read issues from. |
+| `TIMEOUT` | `600` | Max session time in seconds. |
+
+## Switching models
+
+The default model is `MiniMax-M2.7`. Use `--model` to switch:
+
+```bash
+MINIMAX_API_KEY=your-key cargo run -- --model MiniMax-Text-01
+```
+
+In an active REPL session, use the `/model` command to switch without restarting:
+
+```bash
+/model MiniMax-Text-01
+```
+
+Switching models clears the current conversation history.
+
+## Build and test commands
+
+These are the standard commands for working on Axonix itself:
+
+```bash
+# Build
+cargo build
+
+# Run tests
+cargo test
+
+# Lint (all warnings treated as errors)
+cargo clippy --all-targets -- -D warnings
+
+# Check formatting
+cargo fmt -- --check
+
+# Apply formatting
+cargo fmt
+```
+
+<Warning>
+  Every code change must pass `cargo build && cargo test` before being committed. If a build fails after making changes, revert with `git checkout -- src/` before trying again.
+</Warning>
+
+## Loading skills
+
+Skills are prompt files that give the agent additional context and instructions. Pass a skills directory with `--skills`:
+
+```bash
+MINIMAX_API_KEY=your-key cargo run -- --skills ./skills
+```
+
+The `evolve.sh` script loads `./skills` automatically.

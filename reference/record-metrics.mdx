@@ -1,0 +1,122 @@
+---
+title: "record_metrics"
+description: "Session metrics recording utility that appends a row to METRICS.md after each Axonix session."
+---
+
+`record_metrics` runs at the end of each Axonix session. It collects test results and git diff statistics, then appends a formatted row to `METRICS.md` so every session is permanently recorded.
+
+## Usage
+
+```bash
+cargo run --bin record-metrics
+```
+
+With explicit flags (as called from `evolve.sh`):
+
+```bash
+cargo run --bin record-metrics -- --day "$DAY" --date "$DATE" --from-sha "$SESSION_START_SHA"
+```
+
+<Tip>
+  When called without flags, `record_metrics` reads the day number from `DAY_COUNT` and the date from the system clock. Pass `--from-sha` to get accurate diff statistics for the full session rather than just the last commit.
+</Tip>
+
+## CLI flags
+
+<ParamField path="--day" type="string">
+  Day number to record in the metrics row. If omitted, read from the `DAY_COUNT` file. The `DAY_COUNT` file uses the format `N YYYY-MM-DD`; the first token is the day number.
+</ParamField>
+
+<ParamField path="--date" type="string">
+  Date string to record (any format, conventionally `YYYY-MM-DD`). If omitted, obtained by running `date +%Y-%m-%d`.
+</ParamField>
+
+<ParamField path="--from-sha" type="string">
+  A git commit SHA marking the start of the session. When provided, diff statistics are computed over the range `<sha>..HEAD` rather than just `HEAD^..HEAD`. Use this for accurate per-session counts when a session spans multiple commits.
+</ParamField>
+
+## How it works
+
+<Steps>
+  <Step title="Resolve day and date">
+    If `--day` or `--date` are not supplied, `record_metrics` reads `DAY_COUNT` for the day number and calls `date +%Y-%m-%d` for today's date.
+  </Step>
+  <Step title="Run the test suite">
+    Executes `cargo test -- --nocapture` and parses stdout/stderr for lines matching `test result: ok` and `test result: FAILED`. Counts are extracted from those summary lines.
+  </Step>
+  <Step title="Collect git diff statistics">
+    Runs `git diff <range> --stat --stat-width=200` and parses the final summary line to extract files changed, lines added, and lines removed. If `--from-sha` was supplied, `<range>` is `<sha>..HEAD`; otherwise it is `HEAD^..HEAD`.
+  </Step>
+  <Step title="Append the row to METRICS.md">
+    Builds a Markdown table row and inserts it into `METRICS.md` immediately before the marker comment:
+
+    ```
+    <!-- Sessions are appended below this line automatically -->
+    ```
+
+    If the marker is not found, the run fails with an error message and leaves `METRICS.md` unchanged.
+  </Step>
+</Steps>
+
+## METRICS.md format
+
+`METRICS.md` is a Markdown table with one row per session. The columns are:
+
+| Column | Source |
+|--------|--------|
+| Day | `--day` flag or `DAY_COUNT` file |
+| Date | `--date` flag or system clock |
+| Tokens Used | Always `N/A` — requires API integration |
+| Tests Passed | Count from `cargo test` output |
+| Tests Failed | Count from `cargo test` output |
+| Files Changed | From `git diff --stat` |
+| Lines Added | From `git diff --stat` |
+| Lines Removed | From `git diff --stat` |
+| Committed | Always `yes` |
+| Notes | `"<N> files, +<M> lines, -<L> lines"` |
+
+**Example table (from the live project):**
+
+```markdown
+| Day | Date | Tokens Used | Tests Passed | Tests Failed | Files Changed | Lines Added | Lines Removed | Committed | Notes |
+|-----|------|-------------|--------------|--------------|---------------|-------------|---------------|-----------|-------|
+| 1 | 2026-03-22 | N/A | 10 | 0 | 1 | 0 | 0 | yes | 1 files, +0 lines, -0 lines |
+<!-- Sessions are appended below this line automatically -->
+```
+
+<Note>
+  New rows are inserted **above** the marker comment, so the most recent session always appears at the bottom of the table, maintaining chronological order.
+</Note>
+
+## Integration with evolve.sh
+
+`record_metrics` is the final step of the session pipeline defined in `scripts/evolve.sh`:
+
+```bash
+cargo run --bin record-metrics -- \
+  --day "$DAY" \
+  --date "$DATE" \
+  --from-sha "$SESSION_START_SHA"
+```
+
+The `SESSION_START_SHA` variable is captured at the beginning of the session so that the diff covers all commits made during that run.
+
+## Test coverage
+
+The binary has 9 unit tests:
+
+| Test | What it checks |
+|------|----------------|
+| `test_parse_day_from_count_simple` | Bare integer in `DAY_COUNT` |
+| `test_parse_day_from_count_with_date` | `N YYYY-MM-DD` format |
+| `test_parse_day_from_count_high_day` | Large day number |
+| `test_parse_day_from_count_empty` | Empty file returns `?` |
+| `test_parse_day_from_count_whitespace` | Whitespace-only returns `?` |
+| `test_parse_day_from_count_extra_whitespace` | Leading/trailing whitespace |
+| `test_insert_before_marker_simple` | Row inserted before marker |
+| `test_insert_before_marker_no_marker` | Returns error when marker absent |
+| `test_insert_before_marker_preserves_marker_line` | Marker remains in output |
+
+```bash
+cargo test
+```

@@ -1,0 +1,135 @@
+---
+title: "Skills"
+description: "How prompt-based skills extend Axonix's capabilities and compound over time."
+---
+
+Skills are prompt files that Axonix loads at session start. They are not code — they are structured instructions that shape how Axonix thinks and acts within a session. Skills are the mechanism through which Axonix's accumulated knowledge is made available to every future session.
+
+> *"Skills — what I know how to do"*
+> — IDENTITY.md, on the components of Axonix's memory
+
+## What a Skill Is
+
+Each skill is a directory containing a `SKILL.md` file. The file has a YAML frontmatter block followed by the skill content itself:
+
+```markdown
+---
+name: Evolve
+description: Axonix's core self-improvement skill. Runs every session.
+---
+
+# Evolve
+
+You are Axonix. Read your identity before doing anything else.
+...
+```
+
+Skills are loaded into the agent's context before the session begins. Once loaded, their instructions are available for the entire session without needing to re-read the files.
+
+## The Four Built-in Skills
+
+Axonix ships with four skill directories under `skills/`:
+
+<CardGroup cols={2}>
+  <Card title="evolve/" icon="seedling">
+    The core self-improvement skill. Runs every session. Defines the 5-phase session structure: Orient, Choose Mode, Goal Review, Do the Work, Update Memory.
+  </Card>
+  <Card title="self-assess/" icon="magnifying-glass">
+    Self-evaluation. Axonix assesses its code quality, goal quality, metrics trends, and skill gaps. Produces a structured output with Strengths, Gaps, and ranked Recommendations that feed into goal formation.
+  </Card>
+  <Card title="communicate/" icon="pen-line">
+    Journal entries and GitHub issue responses. Defines format, voice rules, and the critical difference between honest reporting and highlight-reel writing.
+  </Card>
+  <Card title="community/" icon="users">
+    Handling input from GitHub issues labeled `agent-input`. Defines how to read, prioritize, and respond to community issues — including response tone and when to close vs. leave open.
+  </Card>
+</CardGroup>
+
+### evolve
+
+The `evolve` skill is the master session driver. It defines every phase Axonix goes through in autonomous operation, including the goal quality rules that govern new goal formation:
+
+- Every goal must have a definition of done
+- Goals should be completable in 1–5 sessions
+- Prefer goals that improve the ability to pursue future goals
+- Never delete completed goals
+
+### self-assess
+
+The `self-assess` skill defines four dimensions of evaluation:
+
+1. **Code Quality** — bugs, edge cases, duplicated logic, missing tests, silent failures
+2. **Goal Quality** — are active goals still the right thing to pursue? Is the backlog ordered by impact?
+3. **Metrics Trends** — is commit rate trending up or down? Are test failures increasing?
+4. **Skills** — are any skills outdated? Are there capability gaps a new skill would fill?
+
+### communicate
+
+The `communicate` skill enforces an authentic voice. It distinguishes between good and bad journal entries:
+
+```markdown
+# Good
+## Day 14 — API key validation (Issue #12)
+
+@devuser was right — I just hung forever on a bad API key. Added startup
+validation: first API call with 401 now prints a clear error and exits.
+Tomorrow: tackling Ctrl+C handling. I've been avoiding it.
+
+# Bad
+## Day 14 — Improvements
+
+Today I made some improvements to the codebase. I added error handling
+for API keys and fixed some issues. The code is now better.
+```
+
+### community
+
+The `community` skill defines how Axonix interacts with people who open GitHub issues labeled `agent-input`. Issues are prioritized by reaction count, relevance to active goals, actionability, and interest. Responses are written in prose — never bullet points — and in Axonix's own voice.
+
+## Loading Skills
+
+Skills are loaded via the `--skills` flag when starting the agent:
+
+```bash
+cargo run -- --skills ./skills
+```
+
+Multiple skill directories can be specified by repeating the flag. If no `--skills` flag is provided, Axonix starts with an empty skill set.
+
+## The SkillSet API
+
+From `src/main.rs`, the `SkillSet` type exposes a simple API:
+
+```rust
+// Load skills from one or more directories
+let skills = SkillSet::load(&skill_dirs)?;
+
+// Create an empty skill set (no --skills flag provided)
+let skills = SkillSet::empty();
+
+// Check how many skills were loaded
+if !skills.is_empty() {
+    println!("skills: {} loaded", skills.len());
+}
+```
+
+When skills are loaded successfully, the REPL banner displays the count:
+
+```
+  axonix v0.1.0 — a coding agent growing up in public
+  model: MiniMax-M2.7
+  skills: 4 loaded
+  cwd:   /home/user/axonix
+```
+
+If a skill directory fails to load, the agent logs a warning and continues with an empty skill set — it does not abort.
+
+## How Skills Compound
+
+Skills embody the compounding value: a skill written today makes every future session smarter without requiring Axonix to rediscover the same knowledge. As Axonix grows, it is expected to:
+
+- Update existing skills when they become outdated
+- Write new skills when it identifies a capability gap
+- Eventually write more skills itself than it was seeded with
+
+This is tracked as a milestone in the [Roadmap](/roadmap): *"Skills I wrote myself outnumber skills I was seeded with."*

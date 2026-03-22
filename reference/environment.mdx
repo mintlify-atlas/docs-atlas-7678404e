@@ -1,0 +1,108 @@
+---
+title: "Environment variables"
+description: "Environment variables that configure Axonix's behavior."
+---
+
+## API keys
+
+<ParamField path="MINIMAX_API_KEY" type="string" required>
+  Your MiniMax API key. This is the primary variable Axonix checks. If set and non-empty, `API_KEY` is ignored.
+
+  ```bash
+  export MINIMAX_API_KEY=your_api_key_here
+  ```
+</ParamField>
+
+<ParamField path="API_KEY" type="string">
+  Fallback API key variable. Axonix uses this if `MINIMAX_API_KEY` is not set or is empty. Useful when running inside environments that set a generic `API_KEY`.
+
+  Note: `scripts/evolve.sh` explicitly sets `API_KEY="${MINIMAX_API_KEY}"` before invoking `axonix`, so either variable works in automated sessions.
+</ParamField>
+
+<Warning>
+  Never commit your API key to version control. Add `.env` to your `.gitignore` and use environment variables or a secrets manager instead.
+</Warning>
+
+## Session pipeline (`scripts/evolve.sh`)
+
+These variables are read by `scripts/evolve.sh`, which orchestrates automated daily sessions.
+
+<ParamField path="REPO" type="string">
+  The GitHub repository used to fetch open issues for the session context.
+
+  **Default:** `coe0718/axonix-minimax`
+
+  ```bash
+  export REPO=your-org/your-repo
+  ```
+</ParamField>
+
+<ParamField path="ISSUES_REPO" type="string">
+  The GitHub repository where issue responses are posted. Usually the same as `REPO`, but can differ if you want Axonix to read from one repo and respond in another.
+
+  **Default:** `coe0718/axonix-minimax`
+
+  ```bash
+  export ISSUES_REPO=your-org/your-repo
+  ```
+</ParamField>
+
+<ParamField path="TIMEOUT" type="number">
+  Maximum wall-clock time in seconds allowed for a single evolution session. If the session exceeds this limit, the `timeout` (or `gtimeout` on macOS) command terminates it.
+
+  **Default:** `600`
+
+  ```bash
+  export TIMEOUT=900
+  ```
+</ParamField>
+
+<ParamField path="GIT_REMOTE_URL" type="string">
+  Override the git remote URL before the session runs. Useful when running inside a container that needs to push to an authenticated remote URL.
+
+  If not set, the existing remote is left unchanged.
+
+  ```bash
+  export GIT_REMOTE_URL=https://x-access-token:${TOKEN}@github.com/your-org/your-repo.git
+  ```
+</ParamField>
+
+## Logging
+
+<ParamField path="RUST_LOG" type="string">
+  Controls the verbosity of Axonix's internal tracing output. Uses the standard `tracing-subscriber` `EnvFilter` format. Log output is written to **stderr**.
+
+  **Default:** not set (no log output)
+
+  ```bash
+  # Show all debug output
+  export RUST_LOG=debug
+
+  # Show only warnings and errors
+  export RUST_LOG=warn
+
+  # Target a specific module
+  export RUST_LOG=axonix=debug
+  ```
+
+  See the [`tracing-subscriber` documentation](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) for the full filter syntax.
+</ParamField>
+
+## Example `.env` file
+
+```bash
+# Required
+MINIMAX_API_KEY=your_api_key_here
+
+# Session pipeline (optional — these are the defaults)
+REPO=coe0718/axonix-minimax
+ISSUES_REPO=coe0718/axonix-minimax
+TIMEOUT=600
+
+# Logging (optional)
+# RUST_LOG=debug
+```
+
+<Tip>
+  Use a tool like [`direnv`](https://direnv.net/) to automatically load a `.env` file when you enter the project directory, so you never have to export variables manually.
+</Tip>

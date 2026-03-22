@@ -1,0 +1,101 @@
+---
+title: "Evolution levels"
+description: "Detailed breakdown of each level in Axonix's growth path."
+---
+
+Each level has a concrete checklist. Items are sourced from the planned curriculum, GitHub issues (marked with issue number), or Axonix's own self-assessment (marked with `[self]`).
+
+<Tip>
+  Completed items are tracked in `GOALS.md` with full context: motivation, definition of done, start date, completion date, and notes on what was built. The checklist below reflects the current state of that file.
+</Tip>
+
+<AccordionGroup>
+  <Accordion title="Level 1: Survive (Day 1–7)" icon="shield">
+    **Goal:** Learn to not break. Build trust in the codebase.
+
+    This level is about handling failure modes gracefully before anything else. An agent that panics or crashes on bad input cannot be trusted with more ambitious tasks. Every item here is a prerequisite for everything that follows.
+
+    - [ ] Add error handling for API failures (bad key, network down, rate limit)
+    - [ ] Fix any panics — catch all `unwrap()` calls and handle properly
+    - [ ] Handle Ctrl+C gracefully
+    - [ ] Write tests for core functionality
+    - [ ] Verify `evolve.sh` runs cleanly end to end
+    - [x] **First metrics row successfully appended to METRICS.md** _(completed Day 1)_
+
+    The first row of `METRICS.md` was written on Day 1 (2026-03-22): 10 tests passed, 0 failed, session committed.
+  </Accordion>
+
+  <Accordion title="Level 2: Know Myself (Day 8–21)" icon="chart-line">
+    **Goal:** Build the instruments needed to understand own performance.
+
+    Visibility into performance is a prerequisite for improvement. Without consistent metrics and honest self-assessment, there is no way to distinguish real progress from the appearance of progress.
+
+    - [x] **Metrics tracking working and consistent across sessions** _(completed Day 2 — G-001)_
+    - [ ] Self-assessment produces honest, specific findings — not generic ones
+    - [ ] Goal formation produces goals actually pursued, not just written
+    - [ ] `JOURNAL.md` tells a real story — not a highlight reel
+    - [ ] At least one goal completed and moved to Completed
+    - [ ] Patterns visible in `METRICS.md` — can identify what is and isn't working
+
+    **G-001** (completed Day 2): The `record_metrics` binary works correctly. Two bugs were fixed — day was parsed as the full `DAY_COUNT` line instead of just the number, and the row was appended after the marker comment instead of before. 9 tests added. Note: `evolve.sh` integration is blocked by a read-only `scripts/` mount, but the binary works correctly when invoked manually.
+  </Accordion>
+
+  <Accordion title="Level 3: Be Visible (Day 22–40)" icon="eye">
+    **Goal:** Give the person running Axonix — and anyone watching — a window into what is happening.
+
+    Transparency is how Axonix earns external trust. A live dashboard and real-time session streaming let observers verify claims about progress rather than taking them on faith. Community interaction closes the loop: input from outside shapes what gets built next.
+
+    - [ ] Dashboard live at a real URL showing day count, goals, metrics, journal
+    - [ ] Dashboard built and owned by Axonix — not seeded by a human
+    - [ ] Live session streaming working — sessions observable in real time
+    - [ ] Journal entries posted to GitHub Discussions automatically
+    - [ ] Community can talk to Axonix and get a response in its own voice
+    - [ ] Social learnings persisting across sessions
+
+    The dashboard is Axonix's own artifact to build. The constraint that it must be built and owned by Axonix — not seeded by a human — is deliberate: it is a test of autonomous capability, not just configuration.
+  </Accordion>
+
+  <Accordion title="Level 4: Be Useful (Day 41–70)" icon="wrench">
+    **Goal:** Stop being a self-improvement project and start being genuinely useful to the specific person and machine that runs Axonix.
+
+    This is the pivot point in the roadmap. Levels 1–3 are about Axonix understanding and presenting itself. Level 4 is about turning that foundation outward — monitoring real systems, surfacing real information, building tools the operator actually needs.
+
+    - [ ] Know the NUC — monitor services, alert on problems, report health
+    - [ ] Morning brief — surface what matters before the day starts
+    - [ ] Build at least one tool Axonix decided to build itself without being asked
+    - [ ] Phone integration — learn daily patterns and incorporate them
+    - [ ] Community voting working as an immune system against bad input
+    - [ ] `PERSONALITY.md` written by Axonix, not seeded — its own voice, its own way
+
+    The requirement to build one tool without being asked is a milestone for autonomous initiative. It is not sufficient to respond to requests — Axonix must identify a gap and fill it unprompted.
+  </Accordion>
+
+  <Accordion title="Level 5: Be Irreplaceable (Day 71–100)" icon="star">
+    **Goal:** Become something shaped so specifically around the person running Axonix that no generic tool could substitute.
+
+    Generic tools optimize for the median user. This level is about moving in the opposite direction: deep, specific adaptation to one person's patterns, needs, and context. By the end, the majority of Axonix's goals and skills should be self-originated.
+
+    - [ ] Know enough about how this person works to anticipate needs
+    - [ ] Proactively surface useful things without being asked
+    - [ ] Build tools that solve problems before they are problems
+    - [ ] Skills written by Axonix outnumber skills it was seeded with
+    - [ ] Goals formed by Axonix outnumber goals it was given
+    - [ ] The dashboard tells a story a stranger could follow and find compelling
+
+    The last two items — self-originated skills and goals outnumbering seeded ones — are quantitative milestones. They are measurable in `GOALS.md` and the skills directory.
+  </Accordion>
+
+  <Accordion title="Boss Level: Prove It" icon="trophy">
+    **Goal:** Demonstrate irreplaceability in concrete, verifiable ways.
+
+    The Boss Level has no day range. It is reached when outcomes are real and externally verified — not when a checklist is complete.
+
+    - [ ] The person running Axonix says: *"I couldn't do without this now"*
+    - [ ] A community member builds something using Axonix as a base
+    - [ ] Axonix identifies and fixes a real problem in the infrastructure it runs on
+    - [ ] Axonix builds a tool that makes the person running it genuinely faster at something
+    - [ ] Axonix writes a journal entry that surprises even the person who initialized it
+
+    The first item is the north star criterion. The rest are supporting evidence. All five require external validation — they cannot be self-assessed.
+  </Accordion>
+</AccordionGroup>

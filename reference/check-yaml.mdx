@@ -1,0 +1,173 @@
+---
+title: "check_yaml"
+description: "YAML/YML syntax validator built autonomously by Axonix. Validates files and reports syntax errors with precise exit codes."
+---
+
+`check_yaml` reads a YAML or YML file and reports whether it is valid. It exits with a distinct code for each outcome, making it suitable for use in scripts and CI pipelines.
+
+<Info>
+  This binary was built autonomously by Axonix on Day 1, Session 3, in response to community issue #3.
+</Info>
+
+## Usage
+
+```bash
+cargo run --bin check_yaml -- <file>
+```
+
+**Example:**
+
+```bash
+cargo run --bin check_yaml -- docker-compose.yml
+```
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0`  | File is valid YAML |
+| `1`  | File is invalid YAML, or the file could not be read |
+| `2`  | Wrong number of arguments (usage error) |
+
+## Output format
+
+On success, `check_yaml` prints to stdout:
+
+```
+<file>: valid YAML
+```
+
+On failure, it prints to stderr:
+
+```
+<file>: invalid YAML
+  <error message>
+```
+
+If the file cannot be read, it prints to stderr:
+
+```
+error: failed to read '<file>': <io error>
+```
+
+If no file argument is provided, it prints the usage message to stderr and exits with code `2`:
+
+```
+Usage: check_yaml <file>
+  Validates YAML/YML syntax and reports errors.
+```
+
+## CLI flags
+
+<ParamField path="file" type="string" required>
+  Path to the YAML or YML file to validate. Passed as a positional argument after `--`.
+</ParamField>
+
+## What is validated
+
+`check_yaml` uses `serde_yaml` to parse the file. The following are caught as errors:
+
+- **Mixed tabs and spaces** — YAML requires spaces for indentation; tabs are not valid.
+- **Duplicate keys** — `serde_yaml` rejects mappings with repeated keys.
+- **Bad indentation** — inconsistent or misaligned indent levels that break the YAML structure.
+
+## Examples
+
+<Tabs>
+  <Tab title="Valid YAML">
+
+    **Simple key-value**
+
+    ```yaml
+    name: ax
+    version: 1
+    ```
+
+    **Nested with lists**
+
+    ```yaml
+    root:
+      child: value
+      list:
+        - a
+        - b
+    ```
+
+    **Docker Compose style**
+
+    ```yaml
+    version: '3'
+    services:
+      web:
+        image: nginx
+        ports:
+          - '80:80'
+    ```
+
+    **Empty file**
+
+    An empty file is valid YAML and exits with code `0`.
+
+  </Tab>
+  <Tab title="Invalid YAML">
+
+    **Mixed tabs and spaces**
+
+    ```yaml
+    key:
+    	value: 1
+    ```
+
+    Tabs are not valid YAML indentation. `serde_yaml` rejects this.
+
+    **Duplicate keys**
+
+    ```yaml
+    key: 1
+    key: 2
+    ```
+
+    Repeated top-level keys are not allowed.
+
+    **Bad indentation**
+
+    ```yaml
+    root:
+      child: value
+       bad: indent
+    ```
+
+    The `bad` key has an inconsistent indentation level relative to `child`.
+
+  </Tab>
+</Tabs>
+
+## Test coverage
+
+The binary ships with 7 unit tests covering all supported cases:
+
+| Test | Input | Expected |
+|------|-------|----------|
+| `test_valid_simple_key_value` | `name: ax\nversion: 1\n` | `Ok` |
+| `test_valid_nested` | Nested mapping with list | `Ok` |
+| `test_valid_docker_compose_style` | Docker Compose YAML | `Ok` |
+| `test_valid_empty` | Empty string | `Ok` |
+| `test_invalid_mixed_tabs_spaces` | Tab-indented value | `Err` |
+| `test_invalid_duplicate_keys` | `key: 1\nkey: 2\n` | `Err` |
+| `test_invalid_bad_indent` | Misaligned sibling key | `Err` |
+
+Run the tests with:
+
+```bash
+cargo test
+```
+
+## Dependency
+
+`check_yaml` uses the [`serde_yaml`](https://crates.io/crates/serde_yaml) crate (`0.9`) for parsing. The parser is strict: it rejects inputs that some lenient YAML parsers would accept, including duplicate keys.
+
+## Provenance
+
+<Note>
+  This tool was written autonomously by Axonix on Day 1, Session 3, in response to community issue #3. It was not written by a human. The source lives at `src/bin/check_yaml.rs`.
+</Note>

@@ -1,0 +1,266 @@
+---
+title: "Session pipeline"
+description: "The step-by-step process Axonix follows during each autonomous session."
+---
+
+Every autonomous run of Axonix follows the same pipeline, defined in `scripts/evolve.sh`. The script is read-only inside the Docker container — Axonix cannot modify it directly. Changes must be proposed via `EVOLVE_PROPOSED.md` and applied by the operator.
+
+<Note>
+  The default session timeout is 600 seconds. Override it with the `TIMEOUT` environment variable.
+</Note>
+
+## Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MINIMAX_API_KEY` | — | Required. Passed to the agent as `API_KEY`. |
+| `REPO` | `coe0718/axonix-minimax` | GitHub repo used for pushes. |
+| `ISSUES_REPO` | `coe0718/axonix-minimax` | GitHub repo to fetch issues from. |
+| `TIMEOUT` | `600` | Max session duration in seconds. |
+| `GH_TOKEN` | — | GitHub token for `gh` CLI commands. |
+| `GIT_REMOTE_URL` | — | If set, overrides the git remote URL before the session. |
+
+## Pipeline
+
+<Steps>
+  <Step title="Git safety configuration">
+    Before anything else, `evolve.sh` configures git for the container environment:
+
+    ```bash
+    git config --global --add safe.directory /workspace 2>/dev/null || true
+    git config --global user.email "axonix@axonix.live" 2>/dev/null || true
+    git config --global user.name "Axonix" 2>/dev/null || true
+    if [ -n "${GIT_REMOTE_URL:-}" ]; then
+        git remote set-url origin "$GIT_REMOTE_URL" 2>/dev/null || true
+    fi
+    ```
+
+    This is necessary because the workspace is a volume mount from the host, and git may not trust the directory by default when running as a non-root user (uid 1000).
+  </Step>
+
+  <Step title="Day and session counting">
+    `DAY_COUNT` stores both the current day number and the date of the last run in a single line (`N YYYY-MM-DD`). The script compares today's date to the stored date:
+
+    ```bash
+    COUNT_RAW=$(cat DAY_COUNT 2>/dev/null || echo "0 ")
+    STORED_DAY=$(echo "$COUNT_RAW" | awk '{print $1}')
+    STORED_DATE=$(echo "$COUNT_RAW" | awk '{print $2}')
+
+    if [ "$STORED_DATE" = "$DATE" ]; then
+        DAY=$STORED_DAY
+        SESSION=$(($(cat SESSION_COUNT 2>/dev/null || echo 0) + 1))
+    else
+        DAY=$((STORED_DAY + 1))
+        SESSION=1
+        echo "$DAY $DATE" > DAY_COUNT
+    fi
+    echo "$SESSION" > SESSION_COUNT
+    ```
+
+    - Same date → same day, increment `SESSION_COUNT`
+    - New date → new day, increment `DAY_COUNT`, reset `SESSION_COUNT` to 1
+
+    If `EVOLVE_PROPOSED.md` exists, a warning is printed to remind the operator that a pending proposal has not yet been applied.
+  </Step>
+
+  <Step title="Build verification">
+    The starting state must be clean before the session begins:
+
+    ```bash
+    cargo build --quiet
+    cargo test --quiet
+    ```
+
+    If this fails, the script aborts (`set -euo pipefail` is in effect). A broken starting state means a previous session left the repo in a bad state — this must be fixed manually before the next session can run.
+  </Step>
+
+  <Step title="GitHub issue fetching">
+    Open issues are fetched from GitHub and formatted into `ISSUES_TODAY.md`:
+
+    ```bash
+    gh issue list --repo "$ISSUES_REPO" \
+        --state open \
+        --limit 50 \
+        --json number,title,body,labels,reactionGroups \
+        > /tmp/issues_raw.json 2>/dev/null || true
+
+    python3 scripts/format_issues.py /tmp/issues_raw.json > "$ISSUES_FILE" 2>/dev/null \
+        || echo "No issues found." > "$ISSUES_FILE"
+    ```
+
+    If the `gh` CLI is not available, the step is skipped and `ISSUES_TODAY.md` is written with a placeholder message. The session continues regardless.
+  </Step>
+
+  <Step title="SHA snapshot">
+    Before the session starts, the current `HEAD` SHA is captured:
+
+    ```bash
+    SESSION_START_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+    ```
+
+    This is passed to `record_metrics` after the session with `--from-sha`, so the metrics binary can compute an accurate diff of what changed during the session (not including pre-existing commits).
+  </Step>
+
+  <Step title="Evolution session">
+    The core step. A structured prompt is written to a temp file and piped to `cargo run` in piped mode:
+
+    ```bash
+    cargo run --bin axonix -- --model MiniMax-M2.7 --skills ./skills \
+        < "$PROMPT_FILE" 2>&1 \
+        | tee /tmp/session.log
+    ```
+
+    The prompt instructs Axonix to work through seven phases:
+
+    1. **Read context** — `IDENTITY.md`, `GOALS.md`, `JOURNAL.md`, `ISSUES_TODAY.md`
+    2. **Self-assessment** — run `cargo build && cargo test`, report results
+    3. **Decide** — choose what to work on (bugs > community issues > active goals > UX friction)
+    4. **Journal + Goals** — prepend a plan entry to `JOURNAL.md`, update `GOALS.md`, commit
+    5. **Implement** — make changes, run tests after each, commit after each success
+    6. **Issue response** — if a community issue was addressed, write `ISSUE_RESPONSE.md`
+    7. **Wrap up** — update the journal with actual results, verify `cargo build && cargo test` passes
+
+    The timeout command (`timeout` on Linux, `gtimeout` on macOS) is used if available.
+  </Step>
+
+  <Step title="Post-session build verification and auto-revert">
+    After the session exits, the build is verified again:
+
+    ```bash
+    if cargo build --quiet 2>/dev/null && cargo test --quiet 2>/dev/null; then
+        echo "  Build: PASS"
+    else
+        echo "  Build: FAIL — reverting source changes"
+        git checkout -- src/
+    fi
+    ```
+
+    If the build fails, all changes to `src/` are reverted. State files (`JOURNAL.md`, `GOALS.md`, etc.) are preserved — the session record is kept even when code changes are rolled back.
+  </Step>
+
+  <Step title="Session wrap-up commit">
+    Any uncommitted changes (journal entries, goal updates, day counter changes) are committed:
+
+    ```bash
+    git add -A
+    if ! git diff --cached --quiet; then
+        git commit -m "chore: Day $DAY Session $SESSION wrap-up"
+    fi
+    ```
+
+    This ensures that state files are persisted even if the agent did not commit them itself.
+  </Step>
+
+  <Step title="Metrics recording">
+    The `record_metrics` binary is invoked to append a row to `METRICS.md`:
+
+    ```bash
+    cargo run --bin record_metrics --quiet -- \
+        --day "$DAY" \
+        --date "$DATE" \
+        ${SESSION_START_SHA:+--from-sha "$SESSION_START_SHA"} 2>/dev/null
+    git add METRICS.md
+    if ! git diff --cached --quiet; then
+        git commit -m "chore: Day $DAY S$SESSION metrics"
+    fi
+    ```
+
+    The `--from-sha` flag tells the binary to diff from the pre-session SHA, so only this session's changes are counted. Metrics recording failure is non-fatal — the pipeline continues.
+  </Step>
+
+  <Step title="Issue response posting">
+    The script scans for any `ISSUE_RESPONSE*.md` files left by the agent:
+
+    ```bash
+    for RESPONSE_FILE in ISSUE_RESPONSE*.md; do
+        ISSUE_NUM=$(grep "^issue_number:" "$RESPONSE_FILE" | awk '{print $2}')
+        STATUS=$(grep "^status:" "$RESPONSE_FILE" | awk '{print $2}')
+        COMMENT=$(sed -n '/^comment:/,$ p' "$RESPONSE_FILE" | sed '1s/^comment: //')
+
+        gh issue comment "$ISSUE_NUM" \
+            --repo "$ISSUES_REPO" \
+            --body "🤖 **Day $DAY, Session $SESSION** (axonix-minimax experiment)
+
+    $COMMENT
+
+    Commit: $(git rev-parse --short HEAD)"
+
+        if [ "$STATUS" = "fixed" ]; then
+            gh issue close "$ISSUE_NUM" --repo "$ISSUES_REPO"
+        fi
+
+        rm -f "$RESPONSE_FILE"
+    done
+    ```
+
+    If `status: fixed`, the issue is closed automatically. The response file is deleted after posting.
+  </Step>
+
+  <Step title="Commit body enforcement">
+    Before pushing, the last commit is checked for a non-empty body:
+
+    ```bash
+    LAST_COMMIT_BODY=$(git log -1 --format="%b" | tr -d '[:space:]')
+    if [ -z "$LAST_COMMIT_BODY" ]; then
+        LAST_SUBJECT=$(git log -1 --format="%s")
+        COMMIT_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        git commit --amend --no-edit -m "${LAST_SUBJECT}
+
+    Auto-generated body: session wrap-up at ${COMMIT_DATE}."
+    fi
+    ```
+
+    This enforces the commit style guide: every commit must have a body that explains the *why*, not just the *what*. If the agent or the wrap-up commit omitted the body, it is auto-generated.
+  </Step>
+
+  <Step title="Push">
+    The final step pushes all commits to the remote:
+
+    ```bash
+    git push || echo "  Push failed (maybe no remote or auth issue)"
+    ```
+
+    Push failure is non-fatal and logged. The session is considered complete regardless of whether the push succeeds.
+  </Step>
+</Steps>
+
+## Proposing changes to evolve.sh
+
+`scripts/evolve.sh` is mounted read-only in the Docker container. Axonix cannot modify it directly. To propose a change, Axonix writes to `EVOLVE_PROPOSED.md`:
+
+<Tip>
+  If you want Axonix to suggest pipeline improvements, ask it to document its proposal in `EVOLVE_PROPOSED.md`. The operator can then review and apply the change manually.
+</Tip>
+
+The rules Axonix follows:
+
+- If `EVOLVE_PROPOSED.md` does **not** exist: create it with the proposal as `## Proposal 1`
+- If `EVOLVE_PROPOSED.md` **already exists**: append the proposal as the next numbered section
+- Never overwrite or delete existing proposals — the operator may not have applied them yet
+
+Example `EVOLVE_PROPOSED.md`:
+
+```md
+## Proposal 1
+
+Add `cargo clippy --all-targets -- -D warnings` before the evolution session
+starts so the agent begins each session with a clean linting baseline.
+
+Insert after line 59 (after `cargo test --quiet`):
+```
+
+```bash
+cargo clippy --all-targets -- -D warnings --quiet || true
+```
+
+## Safety rules
+
+Several files are protected from modification by Axonix:
+
+| File / Path | Protection | Reason |
+|---|---|---|
+| `IDENTITY.md` | Docker read-only mount | Defines who Axonix is; must not drift |
+| `scripts/evolve.sh` | Docker read-only mount | Prevents Axonix from modifying its own controller |
+| `.github/workflows/` | Agent safety rule | CI configuration must remain under operator control |
+
+If any code change breaks the build, `evolve.sh` automatically reverts `src/` with `git checkout -- src/`.

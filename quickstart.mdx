@@ -1,80 +1,191 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get Axonix running locally in minutes — interactive REPL, piped mode, or a full autonomous session."
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, make sure you have the following installed:
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- **Rust and Cargo** — [rustup.rs](https://rustup.rs) is the recommended installer. Axonix targets the 2021 edition.
+- **Git** — required to clone the repository and for Axonix to commit its own changes.
+- **A MiniMax API key** — Axonix uses [MiniMax](https://api.minimax.io) as its model provider. Create an account and generate a key from the MiniMax console.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  `MINIMAX_API_KEY` is required to start the agent. Without it, Axonix exits
+  immediately with an error. The alternative env var `API_KEY` is also
+  accepted if you prefer not to use the MiniMax-specific name.
 </Note>
+
+## Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/coe0718/axonix-minimax
+    cd axonix-minimax
+    ```
+  </Step>
+
+  <Step title="Set your API key">
+    Export your MiniMax API key into the environment. You can add this to your
+    shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to make it permanent.
+
+    ```bash
+    export MINIMAX_API_KEY=your_key_here
+    ```
+
+    Or inline it with each command if you prefer not to persist it:
+
+    ```bash
+    MINIMAX_API_KEY=your_key_here cargo run
+    ```
+  </Step>
+
+  <Step title="Build and run the test suite">
+    Verify that everything compiles cleanly and all tests pass before doing
+    anything else. This is also what the autonomous session pipeline does as
+    its first and last action.
+
+    ```bash
+    cargo build
+    cargo test
+    ```
+
+    Expected output:
+
+    ```text
+    test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+    ```
+
+    <Tip>
+      Run `cargo clippy --all-targets -- -D warnings` and `cargo fmt -- --check`
+      to match the same quality gates Axonix applies to its own code changes.
+    </Tip>
+  </Step>
+</Steps>
+
+## Running Axonix
+
+### Interactive REPL
+
+Start Axonix interactively. It reads your terminal input, calls the MiniMax
+model, streams the response back, and shows every tool invocation in real time.
+
+```bash
+cargo run
+```
+
+You'll see the startup banner:
+
+```text
+  axonix v0.1.0 — a coding agent growing up in public
+  Type /quit to exit, /clear to reset
+
+  model: MiniMax-M2.7
+  cwd:   /home/user/axonix-minimax
+
+> 
+```
+
+**REPL commands**
+
+| Command | Effect |
+|---|---|
+| `/quit` or `/exit` | End the session |
+| `/clear` | Clear conversation history and start fresh |
+| `/model <name>` | Switch to a different model mid-session |
+
+To start with a specific model:
+
+```bash
+cargo run -- --model MiniMax-Text-01
+```
+
+To load a skill directory:
+
+```bash
+cargo run -- --skills ./skills
+```
+
+### Piped mode
+
+When stdin is not a terminal, Axonix reads the entire pipe as a single prompt,
+runs it once, prints the response, and exits. This is how the autonomous
+session script drives the agent.
+
+```bash
+echo "What files are in this directory?" | MINIMAX_API_KEY=your_key_here cargo run
+```
+
+Piped mode prints a compact header to stderr and writes the response to stdout,
+making it easy to capture or redirect output:
+
+```bash
+echo "Summarize GOALS.md" | cargo run > summary.txt
+```
+
+<Note>
+  In piped mode the startup banner is suppressed. The model name is printed to
+  stderr so it doesn't contaminate captured output.
+</Note>
+
+### Full autonomous session
+
+The `evolve.sh` script runs a complete self-improvement cycle: build check,
+issue fetch, evolution session, post-session build verification, metrics
+recording, issue responses, and a git push.
+
+```bash
+./scripts/evolve.sh
+```
+
+The script prints a structured log as it works:
+
+```text
+=== Day 3, Session 1: 2026-03-22 ===
+Provider: MiniMax (MiniMax-M2.7 via Anthropic-compat API)
+Timeout: 600s
+
+→ Checking build...
+  Build OK.
+
+→ Fetching community issues...
+  4 issues loaded.
+
+→ Starting evolution session (Codex)...
+
+  axonix (piped mode) — model: MiniMax-M2.7
+  ▶ read IDENTITY.md ✓
+  ▶ read GOALS.md ✓
+  ...
+
+→ Session complete. Checking results...
+  Build: PASS
+  Committed session wrap-up.
+
+→ Recording metrics...
+  Metrics recorded.
+
+→ Pushing...
+=== Day 3, Session 1 complete ===
+```
+
+You can override the defaults with environment variables:
+
+```bash
+REPO=yourorg/yourfork TIMEOUT=300 ./scripts/evolve.sh
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `MINIMAX_API_KEY` | — | Required. MiniMax API key. |
+| `REPO` | `coe0718/axonix-minimax` | GitHub repo for git operations. |
+| `ISSUES_REPO` | `coe0718/axonix-minimax` | Repo to fetch issues from. |
+| `TIMEOUT` | `600` | Max session duration in seconds. |
+
+<Warning>
+  `scripts/evolve.sh` is marked read-only inside the container. Axonix cannot
+  modify it directly — it creates `EVOLVE_PROPOSED.md` with any proposed
+  changes for a human operator to review and apply.
+</Warning>

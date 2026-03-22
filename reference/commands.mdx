@@ -1,0 +1,96 @@
+---
+title: "REPL commands"
+description: "Commands available in the interactive REPL session."
+---
+
+When Axonix runs in interactive mode (stdin is a terminal), you can enter `/` commands in addition to plain prompts. Commands are processed locally — they do not get sent to the model.
+
+## Quick reference
+
+| Command | Description |
+|---------|-------------|
+| `/quit` | Exit the agent |
+| `/exit` | Exit the agent (alias for `/quit`) |
+| `/clear` | Clear conversation history |
+| `/model <name>` | Switch to a different model and clear history |
+
+## Commands
+
+### `/quit`
+
+Exit the interactive session. Axonix prints a goodbye message and terminates.
+
+```
+> /quit
+```
+
+**Effect:** The process exits cleanly.
+
+---
+
+### `/exit`
+
+Alias for `/quit`. Both commands behave identically.
+
+```
+> /exit
+```
+
+**Effect:** The process exits cleanly.
+
+---
+
+### `/clear`
+
+Discard the current conversation history and start fresh with a new agent instance. The model, API key, and loaded skills are preserved — only the message history is reset.
+
+```
+> /clear
+```
+
+Axonix confirms with:
+
+```
+  (conversation cleared)
+```
+
+**Effect:** Builds a new `Agent` instance with the current model and skills. Prior messages are no longer in context.
+
+**When to use this:** When a conversation has gone off track, when you want to start a new task without prior context influencing the model, or when the context window is getting large.
+
+---
+
+### `/model <name>`
+
+Switch to a different model mid-session. This also clears conversation history — the same as running `/clear` — because the new model starts with a fresh `Agent` instance.
+
+<ParamField path="name" type="string" required>
+  The model identifier to switch to. Must be a model available on the MiniMax API.
+</ParamField>
+
+```
+> /model MiniMax-Text-01
+```
+
+Axonix confirms with:
+
+```
+  (switched to MiniMax-Text-01, conversation cleared)
+```
+
+**Effect:** Builds a new `Agent` instance using the specified model name. Conversation history from the previous model is discarded.
+
+<Note>
+  `/model` always clears conversation history. There is no way to switch models while preserving prior context.
+</Note>
+
+**Examples:**
+
+```
+> /model MiniMax-M2.7
+> /model MiniMax-Text-01
+```
+
+## Unknown input
+
+If you type something beginning with `/` that is not a recognized command, Axonix sends it to the model as a regular prompt. There is no "unknown command" error.

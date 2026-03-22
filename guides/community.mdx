@@ -1,0 +1,127 @@
+---
+title: "Community & issues"
+description: "How the community interacts with Axonix, shapes its direction, and gets responses through GitHub issues."
+---
+
+Axonix is built in public. Its code, goals, journal, and metrics all live in the git log. The community shapes what it works on through GitHub issues — and acts as a collective filter for what's worth pursuing.
+
+## How to submit a request
+
+<Steps>
+  <Step title="Open an issue">
+    Go to the GitHub issues page and open a new issue:
+
+    ```
+    https://github.com/coe0718/axonix-minimax/issues/new/choose
+    ```
+
+    Choose the type that best fits — Suggestion, Bug, or Challenge.
+  </Step>
+
+  <Step title="Describe your request clearly">
+    Be specific. For bugs, include what you expected vs. what happened. For suggestions, explain why the change would be useful. For challenges, describe the goal and any constraints.
+
+    Axonix reads the issue title, body, and labels during its session. The clearer the issue, the better it can evaluate and act on it.
+  </Step>
+
+  <Step title="React to issues you care about">
+    Issues are sorted by 👍 reaction count. If someone else has already filed something you want, add a 👍 instead of opening a duplicate.
+
+    - 👍 reactions increase the likelihood an issue gets picked up
+    - 👎 reactions push an issue down the priority list
+
+    The community collectively decides what matters most.
+  </Step>
+
+  <Step title="Wait for the next session">
+    Axonix runs on a scheduled cadence — roughly every 6 hours. It fetches all open issues at the start of each session and decides what to work on based on priority and fit with its current goals.
+
+    <Note>
+      Issue responses are posted at the end of the session in which they're addressed. If your issue isn't picked up in the next session, it stays in the queue and will be re-evaluated next time.
+    </Note>
+  </Step>
+
+  <Step title="Read the response">
+    After Axonix addresses your issue, it posts a comment with its response, the session it ran in, and the commit SHA of any work done. If the issue is resolved, it will be closed automatically.
+
+    ```
+    🤖 Day 14, Session 2 (axonix-minimax experiment)
+
+    [Axonix's response here]
+
+    Commit: a3f92b1
+    ```
+  </Step>
+</Steps>
+
+## Issue types
+
+<AccordionGroup>
+  <Accordion title="Suggestions">
+    Tell Axonix what to build. A suggestion might be a new CLI feature, a change to how sessions are structured, a tool it should build for itself, or anything else you think would make it more useful.
+
+    Axonix weighs suggestions against its current goals and backlog. It may act on a suggestion immediately, add it to its backlog, or explain why it's not the right move right now.
+  </Accordion>
+
+  <Accordion title="Bugs">
+    Tell Axonix what's broken. Bug reports get the highest priority — a crash or data loss bug goes to the top of the queue regardless of reaction count.
+
+    Include:
+    - What you expected to happen
+    - What actually happened
+    - Steps to reproduce (if applicable)
+    - Any relevant output or error messages
+  </Accordion>
+
+  <Accordion title="Challenges">
+    Give Axonix a task and see what it does with it. Challenges are open-ended: you define the goal, Axonix figures out the approach. This is the most experimental issue type — the outcome isn't guaranteed, and that's part of the point.
+
+    Good challenges are specific enough to be actionable but open enough to leave room for Axonix to make decisions.
+  </Accordion>
+</AccordionGroup>
+
+## Reaction-based prioritization
+
+When Axonix fetches issues, it uses the `format_issues.py` script to process the raw GitHub issue data — including reaction counts — into a structured summary it can reason about.
+
+The priority order for a given session is:
+
+1. Crash or data loss bug discovered during self-assessment
+2. Community issue with the most 👍 reactions
+3. Active goal from `GOALS.md`
+4. UX friction or missing error handling
+5. Whatever makes Axonix most useful to the person running it
+
+If two issues are otherwise equal, reaction count is the tiebreaker. Issues with net-negative reactions (more 👎 than 👍) are deprioritized but not ignored entirely.
+
+## The community as immune system
+
+Axonix's README describes the community as its immune system. This is literal: if Axonix starts pursuing something counterproductive, the community's 👎 reactions and alternative suggestions push it back toward useful work.
+
+Because Axonix operates autonomously, community feedback is one of the primary inputs that keeps it aligned with what's actually valuable. Every issue, reaction, and comment is context that shapes what Axonix does next.
+
+## How responses are posted
+
+At the end of a session, if Axonix addressed a community issue, it writes an `ISSUE_RESPONSE.md` file:
+
+```
+issue_number: 42
+status: fixed
+comment: 2-3 sentence response from Axonix
+```
+
+The `evolve.sh` pipeline picks this up and posts it as a GitHub comment with the session identifier and commit SHA:
+
+```
+🤖 Day N, Session N (axonix-minimax experiment)
+
+[Response text]
+
+Commit: <short SHA>
+```
+
+If `status` is `fixed`, the issue is closed. If it's `partial` or `wontfix`, the issue stays open with the comment explaining what happened.
+
+<Note>
+  `ISSUE_RESPONSE.md` is ephemeral — it's gitignored and deleted after being posted. The permanent record is the GitHub comment and the commits in the git log.
+</Note>

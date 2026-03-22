@@ -1,0 +1,88 @@
+---
+title: "Metrics"
+description: "How Axonix records and learns from quantitative session data over time."
+---
+
+Metrics are Axonix's instrument panel. Without them, there is no way to tell whether things are improving or regressing across sessions. They were the first infrastructure goal Axonix completed (G-001) precisely because everything else depends on having this data.
+
+> *"No quantitative sense of performance yet. Without data there is no way to tell if things are improving or regressing. Everything else builds on this."*
+> — G-001 motivation, GOALS.md
+
+## The METRICS.md Format
+
+Metrics are stored as a Markdown table in `METRICS.md`. Each row represents one session.
+
+```markdown
+# Metrics
+
+A record of every session. Appended automatically at the end of each run.
+
+| Day | Date | Tokens Used | Tests Passed | Tests Failed | Files Changed | Lines Added | Lines Removed | Committed | Notes |
+|-----|------|-------------|--------------|--------------|---------------|-------------|---------------|-----------|-------|
+| 1 | 2026-03-22 | N/A | 10 | 0 | 1 | 0 | 0 | yes | 1 files, +0 lines, -0 lines |
+<!-- Sessions are appended below this line automatically -->
+```
+
+### Column Definitions
+
+| Column | Description |
+|--------|-------------|
+| **Day** | The day number from `DAY_COUNT` at session time |
+| **Date** | Calendar date in `YYYY-MM-DD` format |
+| **Tokens Used** | Total tokens consumed by the session (or `N/A` if not tracked) |
+| **Tests Passed** | Count of tests passing at session end |
+| **Tests Failed** | Count of tests failing at session end |
+| **Files Changed** | Files modified during the session |
+| **Lines Added** | Lines added across all changed files |
+| **Lines Removed** | Lines removed across all changed files |
+| **Committed** | `yes` if the session produced a commit, `no` if it reverted |
+| **Notes** | One-line summary of what the session did |
+
+## How Metrics Are Recorded
+
+Metrics are written by a dedicated binary — `record_metrics` — rather than by the agent itself. This separation ensures the recording step is deterministic and testable independently of the session logic.
+
+```bash
+# Run after a session to append the metrics row
+cargo run --bin record-metrics
+```
+
+The binary:
+1. Reads `DAY_COUNT` to get the current day number (parses only the numeric first token)
+2. Runs `git diff --stat` to count files changed and lines added/removed
+3. Runs the test suite to get pass/fail counts
+4. Checks `git log` to determine whether the session committed
+5. Appends the row to `METRICS.md` **before** the marker comment `<!-- Sessions are appended below this line automatically -->`
+
+<Note>
+  The `record_metrics` binary reads only the first token from `DAY_COUNT`. If the file contains `1 2026-03-22`, the day is parsed as `1`, not `1 2026-03-22`. This was a bug found and fixed in Day 1, Session 2.
+</Note>
+
+## What Metrics Enable
+
+Metrics feed directly into the `self-assess` skill, which evaluates four trends each session:
+
+- **Commit rate** — is Axonix shipping, or reverting?
+- **Test failures** — are regressions being introduced?
+- **Session length** — are sessions getting more or less efficient?
+- **Revert patterns** — what kinds of changes tend to break things?
+
+Without a growing `METRICS.md`, self-assessment is qualitative only. With it, Axonix can identify bottlenecks quantitatively and form data-driven goals.
+
+## The Relationship to G-001 and G-002
+
+Metrics tracking was goal G-001 — the first completed goal. Its completion directly unlocked G-002:
+
+```
+- [ ] [G-002] Analyze metrics and identify biggest bottleneck
+```
+
+G-001 built the instrument. G-002 reads it. This is the compounding principle in action: G-001 was chosen not because metrics are inherently valuable on day one, but because every future goal that requires knowing whether things are improving depends on having this data.
+
+## Viewing Metrics
+
+The raw `METRICS.md` table is readable directly in the repository. As Axonix builds its dashboard (G-003), metrics will also be visualized at a public URL — showing trends, commit rates, and test health over time.
+
+<Tip>
+  The `Notes` column is the most human-readable part of the metrics table. It is written by the agent at the end of each session and gives a one-line summary of what the session actually accomplished, making it easy to scan the table and understand the arc of development at a glance.
+</Tip>

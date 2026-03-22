@@ -1,0 +1,161 @@
+---
+title: "Architecture"
+description: "How Axonix is structured and how its components fit together."
+---
+
+Axonix is a self-evolving Rust coding agent. Every component has a specific role in the autonomous session loop — from the agent runtime to the shell pipeline that runs it on a schedule.
+
+## Component overview
+
+<CardGroup cols={2}>
+  <Card title="src/main.rs" icon="circle-play">
+    The agent loop. Handles piped mode (autonomous sessions) and interactive REPL mode. Calls `build_agent()` to configure the model and tools.
+  </Card>
+  <Card title="scripts/evolve.sh" icon="arrows-rotate">
+    The daily session pipeline. Verifies the build, fetches GitHub issues, runs an evolution session, records metrics, and pushes commits.
+  </Card>
+  <Card title="scripts/build_site.py" icon="chart-bar">
+    Dashboard generator. Builds the public-facing site from state files so Axonix's progress is visible to anyone watching.
+  </Card>
+  <Card title="scripts/format_issues.py" icon="list-check">
+    Issue formatter. Converts raw JSON from `gh issue list` into a structured `ISSUES_TODAY.md` that the agent prompt can reference.
+  </Card>
+  <Card title="src/bin/record_metrics.rs" icon="table">
+    Metrics recording utility. Accepts `--day`, `--date`, and `--from-sha` flags. Appends a row to `METRICS.md` after each session.
+  </Card>
+  <Card title="skills/evolve/" icon="brain">
+    Core self-improvement prompt. Loaded via `--skills ./skills` and injected into every autonomous session.
+  </Card>
+  <Card title="skills/self-assess/" icon="magnifying-glass">
+    Self-evaluation skill. Guides Axonix through structured review of its own code, metrics, and goals.
+  </Card>
+  <Card title="skills/communicate/" icon="pen-line">
+    Journal and issue response skill. Defines how Axonix writes to `JOURNAL.md` and constructs `ISSUE_RESPONSE.md`.
+  </Card>
+  <Card title="skills/community/" icon="users">
+    GitHub discussions skill. Shapes how Axonix reads community input and incorporates it into session decisions.
+  </Card>
+  <Card title="vendor/yoagent" icon="cube">
+    The agent runtime library. Provides `Agent`, `OpenAiCompatProvider`, `SkillSet`, `ModelConfig`, and the tool infrastructure.
+  </Card>
+</CardGroup>
+
+## The agent runtime: yoagent
+
+Axonix is built on [yoagent](https://github.com/yologdev/yoagent), a minimal Rust agent loop. It provides the core abstractions Axonix uses every session:
+
+- `Agent` — the stateful conversation runner
+- `OpenAiCompatProvider` — an OpenAI-compatible HTTP provider
+- `ModelConfig` — per-model configuration (context window, tokens, URL, protocol)
+- `SkillSet` — a collection of skill files loaded from disk and injected into the system prompt
+- `default_tools()` — the default tool set (bash, read_file, write_file, edit_file, list_files, search)
+
+## `build_agent()`: model configuration
+
+Every session (and every `/clear` or `/model` command in REPL mode) calls `build_agent()` to produce a fresh `Agent`. The model is configured via `ModelConfig`:
+
+```rust
+fn build_agent(model: &str, api_key: &str, skills: SkillSet) -> Agent {
+    let config = ModelConfig {
+        id: model.into(),
+        name: model.into(),
+        api: ApiProtocol::OpenAiCompletions,
+        provider: "minimax".into(),
+        base_url: "https://api.minimax.io/v1".into(),
+        reasoning: false,
+        context_window: 1_000_000,
+        max_tokens: 8192,
+        cost: Default::default(),
+        headers: HashMap::new(),
+        compat: None,
+    };
+    Agent::new(OpenAiCompatProvider)
+        .with_system_prompt(SYSTEM_PROMPT)
+        .with_model(model)
+        .with_model_config(config)
+        .with_api_key(api_key)
+        .with_skills(skills)
+        .with_tools(default_tools())
+}
+```
+
+Key details:
+
+| Field | Value |
+|---|---|
+| `api` | `ApiProtocol::OpenAiCompletions` — standard OpenAI chat completions format |
+| `provider` | `"minimax"` |
+| `base_url` | `https://api.minimax.io/v1` |
+| `context_window` | 1,000,000 tokens |
+| `max_tokens` | 8,192 tokens per response |
+| Default model | `MiniMax-M2.7` (overridable with `--model`) |
+
+The API key is read from `MINIMAX_API_KEY` (or `API_KEY` as a fallback).
+
+## Two execution modes
+
+`src/main.rs` detects whether stdin is a terminal and switches modes:
+
+**Piped mode** — used by `evolve.sh`. Reads all of stdin as a single prompt, runs the agent once, and exits. No REPL, no banner.
+
+```bash
+echo "prompt" | cargo run --bin axonix -- --model MiniMax-M2.7 --skills ./skills
+```
+
+**Interactive REPL mode** — used when running `cargo run` directly. Prints a banner, then loops reading user input and dispatching to the agent.
+
+In-session commands:
+
+| Command | Effect |
+|---|---|
+| `/quit`, `/exit` | Exit |
+| `/clear` | Reset conversation (rebuild agent) |
+| `/model <name>` | Switch model and reset conversation |
+
+## Docker setup
+
+The container is defined in `Dockerfile` (based on `rust:latest`) and orchestrated by `docker-compose.yml`.
+
+```yaml
+services:
+  axonix-minimax:
+    build: .
+    user: "1000:1000"
+    command: ./scripts/evolve.sh
+    volumes:
+      - .:/workspace
+      - ./IDENTITY.md:/workspace/IDENTITY.md:ro
+      - ./scripts/evolve.sh:/workspace/scripts/evolve.sh:ro
+      - ./deploy_key:/workspace/.ssh/id_ed25519:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - TZ=${TZ:-America/Indiana/Indianapolis}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      - GH_TOKEN=${GH_TOKEN}
+      - GIT_SSH_COMMAND=ssh -i /workspace/deploy_key -o StrictHostKeyChecking=no
+      - GIT_REMOTE_URL=git@github.com:coe0718/axonix-minimax.git
+      - HOME=/workspace
+      - CARGO_HOME=/workspace/.cargo
+      - RUST_LOG=yoagent=warn
+```
+
+Two mounts are read-only by design:
+
+- `IDENTITY.md` — Axonix cannot modify who it is
+- `scripts/evolve.sh` — Axonix cannot modify the pipeline that runs it
+
+The entire workspace directory is mounted at `/workspace`, so all state files (`GOALS.md`, `JOURNAL.md`, `METRICS.md`, etc.) are written directly to the host filesystem and committed via the deploy key.
+
+## Dependency tree
+
+```toml
+[dependencies]
+yoagent = { path = "./vendor/yoagent" }       # Agent runtime
+tokio = { version = "1", features = ["full"] } # Async runtime
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = "0.8"                                   # HTTP server (dashboard)
+tower-http = { version = "0.6", features = ["fs"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+serde_yaml = "0.9"                             # YAML validation utility
+```
