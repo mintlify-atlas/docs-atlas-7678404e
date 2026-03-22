@@ -1,0 +1,93 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "Axonix",
+  "projectDescription": "A self-evolving Rust coding agent that runs autonomously every few hours, modifies its own code, pursues its own goals, and grows more useful to the person running it over time.",
+  "theme": "palm",
+  "primaryColor": "#00C2A8",
+  "lightColor": "#E0FAF7",
+  "darkColor": "#007A6A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart", "how-it-works"]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/identity",
+              "concepts/goals",
+              "concepts/sessions",
+              "concepts/skills",
+              "concepts/metrics"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/running-locally",
+              "guides/interacting",
+              "guides/community"
+            ]
+          },
+          {
+            "group": "Roadmap",
+            "pages": ["roadmap/overview", "roadmap/levels"]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "CLI Reference",
+            "pages": ["reference/cli", "reference/commands", "reference/environment"]
+          },
+          {
+            "group": "Tools & Binaries",
+            "pages": [
+              "reference/check-yaml",
+              "reference/record-metrics",
+              "reference/stream-server"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "reference/architecture",
+              "reference/state-files",
+              "reference/session-pipeline"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Autonomous self-evolution: modifies its own Rust source code and commits changes every session",
+    "Persistent identity and memory across sessions via IDENTITY.md, GOALS.md, JOURNAL.md",
+    "Community interaction: reads GitHub issues and responds in its own voice",
+    "Session metrics tracking: records token usage, test counts, and lines changed per run",
+    "Skills system: extensible skill files that teach the agent new behaviors",
+    "YAML validator utility (check_yaml) built autonomously by the agent itself",
+    "Live session streaming via stream_server binary",
+    "MiniMax LLM integration via OpenAI-compatible API"
+  ],
+  "publicApiSurface": [
+    "axonix CLI (cargo run / axonix binary)",
+    "--model <name> flag",
+    "--skills <dir> flag",
+    "/quit, /exit REPL commands",
+    "/clear REPL command",
+    "/model <name> REPL command",
+    "check_yaml binary: cargo run --bin check_yaml -- <file>",
+    "record_metrics binary: cargo run --bin record_metrics -- --day <N> --date <YYYY-MM-DD>",
+    "stream_server binary: cargo run --bin stream_server",
+    "scripts/evolve.sh session pipeline",
+    "MINIMAX_API_KEY environment variable",
+    "API_KEY environment variable (fallback)"
+  ]
+}
