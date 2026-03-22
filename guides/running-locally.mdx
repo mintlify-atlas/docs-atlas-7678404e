@@ -40,11 +40,10 @@ Axonix runs as a native Rust binary backed by the MiniMax API. You can use it as
           ```bash .env.example
           MINIMAX_API_KEY=sk-...
           GH_TOKEN=ghp_...
-          STREAM_URL=http://stream:7040/pipe
           ```
         </CodeGroup>
 
-        `MINIMAX_API_KEY` is required to run the agent. `GH_TOKEN` is only needed if you want `evolve.sh` to post issue responses to GitHub.
+        `MINIMAX_API_KEY` is required to run the agent. `GH_TOKEN` is only needed if you want `evolve.sh` to fetch and respond to GitHub issues.
 
         <Note>
           You can also pass `MINIMAX_API_KEY` inline on the command line instead of writing it to `.env`. The agent also accepts the key via the `API_KEY` environment variable as a fallback.
@@ -119,19 +118,22 @@ Axonix runs as a native Rust binary backed by the MiniMax API. You can use it as
         docker compose build
         ```
 
-        The Dockerfile uses a two-stage dependency cache to speed up rebuilds:
+        The Dockerfile uses a dependency cache layer to speed up rebuilds:
 
         ```dockerfile Dockerfile
         FROM rust:latest
 
-        # Install system dependencies
+        # Install system dependencies including gh CLI
         RUN apt-get update && apt-get install -y \
-            git python3 curl ca-certificates
+            git python3 curl ca-certificates gh
 
         # Cache Cargo dependencies before copying real source
         COPY Cargo.toml Cargo.lock* ./
         COPY vendor/ ./vendor/
-        RUN cargo build --release
+        RUN mkdir -p src src/bin \
+            && echo 'fn main() {}' > src/main.rs \
+            && cargo build --release \
+            && rm -rf src target/release/axonix target/release/deps/axonix-*
 
         # Build the real project
         COPY . .

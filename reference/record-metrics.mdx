@@ -8,13 +8,13 @@ description: "Session metrics recording utility that appends a row to METRICS.md
 ## Usage
 
 ```bash
-cargo run --bin record-metrics
+cargo run --bin record_metrics
 ```
 
 With explicit flags (as called from `evolve.sh`):
 
 ```bash
-cargo run --bin record-metrics -- --day "$DAY" --date "$DATE" --from-sha "$SESSION_START_SHA"
+cargo run --bin record_metrics -- --day "$DAY" --date "$DATE" --from-sha "$SESSION_START_SHA"
 ```
 
 <Tip>
@@ -93,7 +93,7 @@ cargo run --bin record-metrics -- --day "$DAY" --date "$DATE" --from-sha "$SESSI
 `record_metrics` is the final step of the session pipeline defined in `scripts/evolve.sh`:
 
 ```bash
-cargo run --bin record-metrics -- \
+cargo run --bin record_metrics -- \
   --day "$DAY" \
   --date "$DATE" \
   --from-sha "$SESSION_START_SHA"

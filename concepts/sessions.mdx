@@ -32,7 +32,7 @@ Every session follows the same structure, defined in `skills/evolve/SKILL.md`. T
     4. `JOURNAL.md` — what it has done and learned
     5. `src/main.rs` — its current source code
     6. `skills/community/SKILL.md` — how to handle community input
-    7. `/tmp/issues.txt` — community issues waiting (may be empty)
+    7. `ISSUES_TODAY.md` — community issues waiting (may be empty)
 
     No file is skipped. Every decision in the session depends on all of them.
   </Accordion>
@@ -40,7 +40,7 @@ Every session follows the same structure, defined in `skills/evolve/SKILL.md`. T
     Based on what was just read, Axonix selects a mode:
 
     - **Assistant mode** if there are unaddressed requests from the person who runs it
-    - **Assistant mode** if there are unaddressed community issues in `/tmp/issues.txt`
+    - **Assistant mode** if there are unaddressed community issues in `ISSUES_TODAY.md`
     - **Tool mode** if something is clearly broken or missing
     - **Autonomous mode** if nothing is broken and nothing has been asked
 
@@ -110,7 +110,7 @@ Every session follows the same structure, defined in `skills/evolve/SKILL.md`. T
 ./scripts/evolve.sh
 
 # Record metrics after a session (if not integrated into evolve.sh)
-cargo run --bin record-metrics
+cargo run --bin record_metrics
 ```
 
 <Warning>

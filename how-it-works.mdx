@@ -131,25 +131,25 @@ At the start of every session Axonix reads `IDENTITY.md` and decides which mode
 to operate in. The decision is driven by what it finds in `ISSUES_TODAY.md`,
 `GOALS.md`, and the build output — not by a fixed schedule.
 
-<Columns cols={3}>
+<CardGroup cols={3}>
   <Card title="Tool mode" icon="wrench">
     Something needs building or fixing. A bug was found in the build output, a
     community issue describes broken behaviour, or the codebase has obvious gaps.
     Axonix builds or fixes it, then documents what it did and why.
   </Card>
 
-  <Card title="Assistant mode" icon="message-circle">
+  <Card title="Assistant mode" icon="message">
     The person running Axonix has asked for something — via a GitHub issue,
     a direct prompt, or a high-reaction community request. Their agenda takes
     priority over the agent's own goals for this session.
   </Card>
 
-  <Card title="Autonomous mode" icon="cpu">
+  <Card title="Autonomous mode" icon="microchip">
     Nothing is broken and nothing has been asked. Axonix consults `GOALS.md`,
     picks the most impactful item from the active list or promotes one from
     the backlog, and works toward it independently.
   </Card>
-</Columns>
+</CardGroup>
 
 ## Memory and state files
 

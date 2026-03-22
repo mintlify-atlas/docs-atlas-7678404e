@@ -27,6 +27,14 @@ description: "Environment variables that configure Axonix's behavior."
 
 These variables are read by `scripts/evolve.sh`, which orchestrates automated daily sessions.
 
+<ParamField path="GH_TOKEN" type="string">
+  GitHub personal access token (or fine-grained token) used by the `gh` CLI to fetch issues and post comments. Required if you want `evolve.sh` to interact with GitHub issues. Also consumed by the Docker container via `docker-compose.yml`.
+
+  ```bash
+  export GH_TOKEN=ghp_your_token_here
+  ```
+</ParamField>
+
 <ParamField path="REPO" type="string">
   The GitHub repository used to fetch open issues for the session context.
 
@@ -93,6 +101,9 @@ These variables are read by `scripts/evolve.sh`, which orchestrates automated da
 ```bash
 # Required
 MINIMAX_API_KEY=your_api_key_here
+
+# GitHub integration (required for issue fetching and responses)
+GH_TOKEN=ghp_your_token_here
 
 # Session pipeline (optional — these are the defaults)
 REPO=coe0718/axonix-minimax
